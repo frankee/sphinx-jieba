@@ -1,11 +1,11 @@
 /*
- * $Id: SphinxClient.java 4097 2013-08-20 09:28:24Z kevg $
+ * $Id: SphinxClient.java 4885 2015-01-20 07:02:07Z deogar $
  *
  * Java version of Sphinx searchd client (Java API)
  *
  * Copyright (c) 2007, Vladimir Fedorkov
- * Copyright (c) 2007-2013, Andrew Aksyonoff
- * Copyright (c) 2008-2013, Sphinx Technologies Inc
+ * Copyright (c) 2007-2015, Andrew Aksyonoff
+ * Copyright (c) 2008-2015, Sphinx Technologies Inc
  * All rights reserved
  *
  * This program is free software; you can redistribute it and/or modify
@@ -13,6 +13,11 @@
  * received a copy of the GPL license along with this program; if you
  * did not, you can find it at http://www.gnu.org/
  */
+
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//							WARNING
+// We strongly recommend you to use SphinxQL instead of the API
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 package org.sphx.api;
 
@@ -492,9 +497,10 @@ public class SphinxClient
 		_maxQueryTime = maxTime;
 	}
 
-	/** Set matching mode. */
+	/** Set matching mode. DEPRECATED */
 	public void SetMatchMode(int mode) throws SphinxException
 	{
+		System.out.println ( "DEPRECATED: Do not call this method or, even better, use SphinxQL instead of an API\n" );
 		myAssert (
 			mode==SPH_MATCH_ALL ||
 			mode==SPH_MATCH_ANY ||
@@ -726,11 +732,12 @@ public class SphinxClient
 	}
 
 	/**
-	 * Set attribute values override (one override list per attribute).
+	 * DEPRECATED: Set attribute values override (one override list per attribute).
 	 * @param values maps Long document IDs to Int/Long/Float values (as specified in attrtype).
 	 */
 	public void SetOverride ( String attrname, int attrtype, Map values ) throws SphinxException
 	{
+		System.out.println ( "DEPRECATED: Do not call this method. Use SphinxQL REMAP() function instead.\n" );
 		myAssert ( attrname!=null && attrname.length()>0, "attrname must not be empty" );
 		myAssert ( attrtype==SPH_ATTR_INTEGER || attrtype==SPH_ATTR_TIMESTAMP || attrtype==SPH_ATTR_BOOL || attrtype==SPH_ATTR_FLOAT || attrtype==SPH_ATTR_BIGINT,
 			"unsupported attrtype (must be one of INTEGER, TIMESTAMP, BOOL, FLOAT, or BIGINT)" );
@@ -1519,5 +1526,5 @@ public class SphinxClient
 }
 
 /*
- * $Id: SphinxClient.java 4097 2013-08-20 09:28:24Z kevg $
+ * $Id: SphinxClient.java 4885 2015-01-20 07:02:07Z deogar $
  */

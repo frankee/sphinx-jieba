@@ -1,10 +1,10 @@
 //
-// $Id: sphinxstd.h 4292 2013-11-04 19:22:36Z joric $
+// $Id: sphinxstd.h 4891 2015-01-29 13:23:07Z kevg $
 //
 
 //
-// Copyright (c) 2001-2013, Andrew Aksyonoff
-// Copyright (c) 2008-2013, Sphinx Technologies Inc
+// Copyright (c) 2001-2015, Andrew Aksyonoff
+// Copyright (c) 2008-2015, Sphinx Technologies Inc
 // All rights reserved
 //
 // This program is free software; you can redistribute it and/or modify
@@ -79,7 +79,13 @@ typedef int __declspec("SAL_nokernel") __declspec("SAL_nodriver") __prefast_flag
 // COMPILE-TIME CHECKS
 /////////////////////////////////////////////////////////////////////////////
 
-#define STATIC_ASSERT(_cond,_name)		typedef char STATIC_ASSERT_FAILED_ ## _name [ (_cond) ? 1 : -1 ]
+#if defined (__GNUC__)
+#define SPH_ATTR_UNUSED __attribute__((unused))
+#else
+#define  SPH_ATTR_UNUSED
+#endif
+
+#define STATIC_ASSERT(_cond,_name)		typedef char STATIC_ASSERT_FAILED_ ## _name [ (_cond) ? 1 : -1 ] SPH_ATTR_UNUSED
 #define STATIC_SIZE_ASSERT(_type,_size)	STATIC_ASSERT ( sizeof(_type)==_size, _type ## _MUST_BE_ ## _size ## _BYTES )
 
 
@@ -271,8 +277,11 @@ inline int sphBitCount ( DWORD n )
 
 typedef			bool ( *SphDieCallback_t ) ( const char * );
 
-/// crash with an error message
+/// crash with an error message, and do not have searchd watchdog attempt to resurrect
 void			sphDie ( const char * sMessage, ... ) __attribute__ ( ( format ( printf, 1, 2 ) ) );
+
+/// crash with an error message, but have searchd watchdog attempt to resurrect
+void			sphDieRestart ( const char * sMessage, ... ) __attribute__ ( ( format ( printf, 1, 2 ) ) );
 
 /// setup a callback function to call from sphDie() before exit
 /// if callback returns false, sphDie() will not log to stdout
@@ -809,6 +818,15 @@ public:
 		m_pData [ m_iLength++ ] = tValue;
 	}
 
+	/// add N more entries, and return a pointer to that buffer
+	T * AddN ( int iCount )
+	{
+		if ( m_iLength + iCount > m_iLimit )
+			Reserve ( m_iLength + iCount );
+		m_iLength += iCount;
+		return m_pData + m_iLength - iCount;
+	}
+
 	/// add unique entry (ie. do not add if equal to last one)
 	void AddUnique ( const T & tValue )
 	{
@@ -908,7 +926,9 @@ public:
 
 		// realloc
 		// FIXME! optimize for POD case
-		T * pNew = new T [ m_iLimit ];
+		T * pNew = NULL;
+		if ( m_iLimit )
+			pNew = new T [ m_iLimit ];
 		__analysis_assume ( m_iLength<=m_iLimit );
 
 		POLICY::Copy ( pNew, m_pData, m_iLength );
@@ -1008,7 +1028,8 @@ public:
 
 		m_iLength = rhs.m_iLength;
 		m_iLimit = rhs.m_iLimit;
-		m_pData = new T [ m_iLimit ];
+		if ( m_iLimit )
+			m_pData = new T [ m_iLimit ];
 		__analysis_assume ( m_iLength<=m_iLimit );
 		for ( int i=0; i<rhs.m_iLength; i++ )
 			m_pData[i] = rhs.m_pData[i];
@@ -1224,6 +1245,18 @@ public:
 		Reset ( 0 );
 		return pData;
 	}
+
+	/// swap
+	void SwapData ( CSphFixedVector<T> & rhs )
+	{
+		Swap ( m_pData, rhs.m_pData );
+		Swap ( m_iSize, rhs.m_iSize );
+	}
+
+	const T * BinarySearch ( T tRef ) const
+	{
+		return sphBinarySearch ( m_pData, m_pData+m_iSize-1, tRef );
+	}
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -1289,6 +1322,7 @@ public:
 	/// reset
 	void Reset ()
 	{
+		assert ( ( m_pFirstByOrder && m_iLength ) || ( !m_pFirstByOrder && !m_iLength ) );
 		HashEntry_t * pKill = m_pFirstByOrder;
 		while ( pKill )
 		{
@@ -1591,6 +1625,8 @@ struct CSphString
 {
 protected:
 	char *				m_sValue;
+	// Empty ("") string optimization.
+	static char EMPTY[];
 
 private:
 	/// safety gap after the string end; for instance, UTF-8 Russian stemmer
@@ -1617,14 +1653,20 @@ public:
 		*this = rhs;
 	}
 
-	virtual ~CSphString ()
+	~CSphString ()
 	{
-		SafeDeleteArray ( m_sValue );
+		if ( m_sValue!=EMPTY )
+			SafeDeleteArray ( m_sValue );
 	}
 
 	const char * cstr () const
 	{
 		return m_sValue;
+	}
+
+	const char * scstr() const
+	{
+		return m_sValue ? m_sValue : EMPTY;
 	}
 
 	inline bool operator == ( const char * t ) const
@@ -1653,11 +1695,17 @@ public:
 	{
 		if ( sString )
 		{
-			int iLen = 1+strlen(sString);
-			m_sValue = new char [ iLen+SAFETY_GAP ];
+			if ( sString[0]=='\0' )
+			{
+				m_sValue = EMPTY;
+			} else
+			{
+				int iLen = 1+strlen(sString);
+				m_sValue = new char [ iLen+SAFETY_GAP ];
 
-			strcpy ( m_sValue, sString ); // NOLINT
-			memset ( m_sValue+iLen, 0, SAFETY_GAP );
+				strcpy ( m_sValue, sString ); // NOLINT
+				memset ( m_sValue+iLen, 0, SAFETY_GAP );
+			}
 		} else
 		{
 			m_sValue = NULL;
@@ -1674,14 +1722,21 @@ public:
 	{
 		if ( m_sValue==rhs.m_sValue )
 			return *this;
-		SafeDeleteArray ( m_sValue );
+		if ( m_sValue!=EMPTY )
+			SafeDeleteArray ( m_sValue );
 		if ( rhs.m_sValue )
 		{
-			int iLen = 1+strlen(rhs.m_sValue);
-			m_sValue = new char [ iLen+SAFETY_GAP ];
+			if ( rhs.m_sValue[0]=='\0' )
+			{
+				m_sValue = EMPTY;
+			} else
+			{
+				int iLen = 1+strlen(rhs.m_sValue);
+				m_sValue = new char [ iLen+SAFETY_GAP ];
 
-			strcpy ( m_sValue, rhs.m_sValue ); // NOLINT
-			memset ( m_sValue+iLen, 0, SAFETY_GAP );
+				strcpy ( m_sValue, rhs.m_sValue ); // NOLINT
+				memset ( m_sValue+iLen, 0, SAFETY_GAP );
+			}
 		}
 		return *this;
 	}
@@ -1704,18 +1759,26 @@ public:
 
 	void SetBinary ( const char * sValue, int iLen )
 	{
-		SafeDeleteArray ( m_sValue );
+		if ( m_sValue!=EMPTY )
+			SafeDeleteArray ( m_sValue );
 		if ( sValue )
 		{
-			m_sValue = new char [ 1+SAFETY_GAP+iLen ];
-			memcpy ( m_sValue, sValue, iLen );
-			memset ( m_sValue+iLen, 0, 1+SAFETY_GAP );
+			if ( sValue[0]=='\0' )
+			{
+				m_sValue = EMPTY;
+			} else
+			{
+				m_sValue = new char [ 1+SAFETY_GAP+iLen ];
+				memcpy ( m_sValue, sValue, iLen );
+				memset ( m_sValue+iLen, 0, 1+SAFETY_GAP );
+			}
 		}
 	}
 
 	void Reserve ( int iLen )
 	{
-		SafeDeleteArray ( m_sValue );
+		if ( m_sValue!=EMPTY )
+			SafeDeleteArray ( m_sValue );
 		m_sValue = new char [ 1+SAFETY_GAP+iLen ];
 		memset ( m_sValue, 0, 1+SAFETY_GAP+iLen );
 	}
@@ -1809,6 +1872,13 @@ public:
 
 	char * Leak ()
 	{
+		if ( m_sValue==EMPTY )
+		{
+			m_sValue = NULL;
+			char * pBuf = new char[1];
+			pBuf[0] = '\0';
+			return pBuf;
+		}
 		char * pBuf = m_sValue;
 		m_sValue = NULL;
 		return pBuf;
@@ -1817,7 +1887,8 @@ public:
 	// opposite to Leak()
 	void Adopt ( char ** sValue )
 	{
-		SafeDeleteArray ( m_sValue );
+		if ( m_sValue!=EMPTY )
+			SafeDeleteArray ( m_sValue );
 		m_sValue = *sValue;
 		*sValue = NULL;
 	}
@@ -2010,9 +2081,10 @@ private:
 
 /// immutable string/int/float variant list proxy
 /// used in config parsing
-struct CSphVariant : public CSphString
+struct CSphVariant
 {
 protected:
+	CSphString		m_sValue;
 	int				m_iValue;
 	int64_t			m_i64Value;
 	float			m_fValue;
@@ -2026,8 +2098,7 @@ public:
 public:
 	/// default ctor
 	CSphVariant ()
-		: CSphString ()
-		, m_iValue ( 0 )
+		: m_iValue ( 0 )
 		, m_i64Value ( 0 )
 		, m_fValue ( 0.0f )
 		, m_pNext ( NULL )
@@ -2038,10 +2109,10 @@ public:
 
 	/// ctor from C string
 	CSphVariant ( const char * sString, int iTag )
-		: CSphString ( sString )
-		, m_iValue ( m_sValue ? atoi ( m_sValue ) : 0 )
-		, m_i64Value ( m_sValue ? (int64_t)strtoull ( m_sValue, NULL, 10 ) : 0 )
-		, m_fValue ( m_sValue ? (float)atof ( m_sValue ) : 0.0f )
+		: m_sValue ( sString )
+		, m_iValue ( sString ? atoi ( sString ) : 0 )
+		, m_i64Value ( sString ? (int64_t)strtoull ( sString, NULL, 10 ) : 0 )
+		, m_fValue ( sString ? (float)atof ( sString ) : 0.0f )
 		, m_pNext ( NULL )
 		, m_bTag ( false )
 		, m_iTag ( iTag )
@@ -2050,39 +2121,24 @@ public:
 
 	/// copy ctor
 	CSphVariant ( const CSphVariant & rhs )
-		: CSphString ()
-		, m_iValue ( 0 )
-		, m_i64Value ( 0 )
-		, m_fValue ( 0.0f )
-		, m_pNext ( NULL )
 	{
+		m_pNext = NULL;
 		*this = rhs;
 	}
 
 	/// default dtor
 	/// WARNING: automatically frees linked items!
-	virtual ~CSphVariant ()
+	~CSphVariant ()
 	{
 		SafeDelete ( m_pNext );
 	}
 
-	/// int value getter
-	int intval () const
-	{
-		return m_iValue;
-	}
+	const char * cstr() const { return m_sValue.cstr(); }
 
-	/// int64_t value getter
-	int64_t int64val () const
-	{
-		return m_i64Value;
-	}
-
-	/// float value getter
-	float floatval () const
-	{
-		return m_fValue;
-	}
+	const CSphString & strval () const { return m_sValue; }
+	int intval () const	{ return m_iValue; }
+	int64_t int64val () const { return m_i64Value; }
+	float floatval () const	{ return m_fValue; }
 
 	/// default copy operator
 	const CSphVariant & operator = ( const CSphVariant & rhs )
@@ -2091,7 +2147,7 @@ public:
 		if ( rhs.m_pNext )
 			m_pNext = new CSphVariant ( *rhs.m_pNext );
 
-		CSphString::operator = ( rhs );
+		m_sValue = rhs.m_sValue;
 		m_iValue = rhs.m_iValue;
 		m_i64Value = rhs.m_i64Value;
 		m_fValue = rhs.m_fValue;
@@ -2100,6 +2156,9 @@ public:
 
 		return *this;
 	}
+
+	bool operator== ( const char * s ) const { return m_sValue==s; }
+	bool operator!= ( const char * s ) const { return m_sValue!=s; }
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -2112,6 +2171,13 @@ struct CSphNamedInt
 
 	CSphNamedInt () : m_iValue ( 0 ) {}
 };
+
+inline void Swap ( CSphNamedInt & a, CSphNamedInt & b )
+{
+	a.m_sName.Swap ( b.m_sName );
+	Swap ( a.m_iValue, b.m_iValue );
+}
+
 
 /////////////////////////////////////////////////////////////////////////////
 
@@ -2381,16 +2447,14 @@ public:
 #if USE_WINDOWS
 		delete [] this->GetWritePtr();
 #else
-		if ( g_bHeadProcess )
-		{
-			int iRes = munmap ( this->GetWritePtr(), this->GetLengthBytes() );
-			if ( iRes )
-				sphWarn ( "munmap() failed: %s", strerror(errno) );
+		int iRes = munmap ( this->GetWritePtr(), this->GetLengthBytes() );
+		if ( iRes )
+			sphWarn ( "munmap() failed: %s", strerror(errno) );
 
 #if SPH_ALLOCS_PROFILER
-			sphMemStatMMapDel ( this->GetLengthBytes() );
+		sphMemStatMMapDel ( this->GetLengthBytes() );
 #endif
-		}
+
 #endif // USE_WINDOWS
 
 		this->Set ( NULL, 0 );
@@ -2444,7 +2508,7 @@ public:
 		int64_t iCount = 0;
 
 #if USE_WINDOWS
-		HANDLE iFD = CreateFile ( sFile, GENERIC_READ, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0 );
+		HANDLE iFD = CreateFile ( sFile, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, 0 );
 		if ( iFD==INVALID_HANDLE_VALUE )
 		{
 			sError.SetSprintf ( "failed to open file '%s' (errno %d)", sFile, ::GetLastError() );
@@ -2692,6 +2756,7 @@ protected:
 	T &	m_tMutexRef;
 };
 
+
 /// scoped locked shared variable
 template < typename LOCK >
 class CSphScopedLockedShare : public CSphScopedLock<LOCK>
@@ -2707,46 +2772,6 @@ public:
 	{
 		return *(T*)( this->m_tMutexRef.GetSharedData() );
 	}
-};
-
-
-/// MT-aware refcounted base
-/// mutex protected, might be slow
-struct ISphRefcountedMT : public ISphNoncopyable
-{
-protected:
-	ISphRefcountedMT ()
-		: m_iRefCount ( 1 )
-	{
-		m_tLock.Init();
-	}
-
-	virtual ~ISphRefcountedMT ()
-	{
-		m_tLock.Done();
-	}
-
-public:
-	void AddRef () const
-	{
-		m_tLock.Lock();
-		m_iRefCount++;
-		m_tLock.Unlock();
-	}
-
-	void Release () const
-	{
-		m_tLock.Lock();
-		int iRefs = --m_iRefCount;
-		assert ( iRefs>=0 );
-		m_tLock.Unlock();
-		if ( iRefs==0 )
-			delete this;
-	}
-
-protected:
-	mutable int			m_iRefCount;
-	mutable CSphMutex	m_tLock;
 };
 
 
@@ -2776,6 +2801,31 @@ private:
 #else
 	pthread_rwlock_t	m_tLock;
 #endif
+};
+
+
+/// scoped RW lock
+class CSphScopedRWLock : ISphNoncopyable
+{
+public:
+	/// lock on creation
+	CSphScopedRWLock ( CSphRwlock & tLock, bool bRead )
+		: m_tLock ( tLock )
+	{
+		if ( bRead )
+			m_tLock.ReadLock();
+		else
+			m_tLock.WriteLock();
+	}
+
+	/// unlock on going out of scope
+	~CSphScopedRWLock ()
+	{
+		m_tLock.Unlock ();
+	}
+
+protected:
+	CSphRwlock & m_tLock;
 };
 
 
@@ -2871,6 +2921,11 @@ public:
 		, m_iElements ( 0 )
 	{}
 
+	explicit CSphBitvec ( int iElements )
+	{
+		Init ( iElements );
+	}
+
 	~CSphBitvec ()
 	{
 		if ( m_pData!=m_uStatic )
@@ -2927,9 +2982,19 @@ public:
 		return m_pData;
 	}
 
+	DWORD * Begin ()
+	{
+		return m_pData;
+	}
+
 	int GetSize() const
 	{
 		return (m_iElements+31)/32;
+	}
+
+	int GetBits() const
+	{
+		return m_iElements;
 	}
 
 	int BitCount () const
@@ -2945,18 +3010,129 @@ public:
 //////////////////////////////////////////////////////////////////////////
 
 #if USE_WINDOWS
-#define if_const(_arg) \
+#define DISABLE_CONST_COND_CHECK \
 	__pragma ( warning ( push ) ) \
-	__pragma ( warning ( disable:4127 ) ) \
-	if ( _arg ) \
+	__pragma ( warning ( disable:4127 ) )
+#define ENABLE_CONST_COND_CHECK \
 	__pragma ( warning ( pop ) )
 #else
-#define if_const(_arg) \
-	if ( _arg )
+#define DISABLE_CONST_COND_CHECK
+#define ENABLE_CONST_COND_CHECK
 #endif
+
+#define if_const(_arg) \
+	DISABLE_CONST_COND_CHECK \
+	if ( _arg ) \
+	ENABLE_CONST_COND_CHECK
+
+//////////////////////////////////////////////////////////////////////////
+// interlocked (atomic) operation
+
+#if (USE_WINDOWS) || (HAVE_SYNC_FETCH)
+#define NO_ATOMIC 0
+#else
+#define NO_ATOMIC 1
+#endif
+
+template < typename INT >
+class CSphAtomic : public ISphNoncopyable
+{
+	volatile INT	m_iValue;
+#if NO_ATOMIC
+	CSphMutex		m_tLock;
+#endif
+
+public:
+	CSphAtomic ( INT iValue=0 )
+		: m_iValue ( iValue )
+	{
+#if NO_ATOMIC
+		m_tLock.Init();
+#endif
+	}
+
+	~CSphAtomic ()
+	{
+#if NO_ATOMIC
+		m_tLock.Done();
+#endif
+	}
+
+#ifdef HAVE_SYNC_FETCH
+	operator INT()
+	{
+		return __sync_fetch_and_add ( &m_iValue, 0 );
+	}
+
+	// return value here is original value, prior to operation took place
+	inline INT Inc()
+	{
+		return __sync_fetch_and_add ( &m_iValue, 1 );
+	}
+	inline INT Dec()
+	{
+		return __sync_fetch_and_sub ( &m_iValue, 1 );
+	}
+#elif USE_WINDOWS
+	operator INT();
+	INT Inc();
+	INT Dec();
+#endif
+
+#if NO_ATOMIC
+	operator INT()
+	{
+		CSphScopedLock<CSphMutex> tLock ( m_tLock );
+		return m_iValue;
+	}
+	inline INT Inc()
+	{
+		CSphScopedLock<CSphMutex> tLock ( m_tLock );
+		return m_iValue++;
+	}
+	inline INT Dec()
+	{
+		CSphScopedLock<CSphMutex> tLock ( m_tLock );
+		return m_iValue--;
+	}
+#endif
+};
+
+
+
+/// MT-aware refcounted base (might be a mutex protected and slow)
+struct ISphRefcountedMT : public ISphNoncopyable
+{
+protected:
+	ISphRefcountedMT ()
+		: m_iRefCount ( 1 )
+	{}
+
+	virtual ~ISphRefcountedMT ()
+	{}
+
+public:
+	void AddRef () const
+	{
+		m_iRefCount.Inc();
+	}
+
+	void Release () const
+	{
+		long uRefs = m_iRefCount.Dec();
+		assert ( uRefs>=1 );
+		if ( uRefs==1 )
+			delete this;
+	}
+
+protected:
+	mutable CSphAtomic<long>	m_iRefCount;
+};
+
+
 
 #endif // _sphinxstd_
 
 //
-// $Id: sphinxstd.h 4292 2013-11-04 19:22:36Z joric $
+// $Id: sphinxstd.h 4891 2015-01-29 13:23:07Z kevg $
 //

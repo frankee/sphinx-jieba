@@ -35,7 +35,6 @@ index testw
 	dict			= keywords
 	min_infix_len	= 2
 	path			= <data_path/>/testw
-	charset_type	= utf-8
 	blend_chars		= @, .
 	wordforms		= <this_test/>/wordforms.txt
 }
@@ -66,7 +65,6 @@ index testla
 {
 	source			= test1
 	path			= <data_path/>/testla
-	charset_type	= utf-8
 	morphology		= lemmatize_ru_all
 	blend_chars		= @, .
 	wordforms		= <this_test/>/wordforms.txt
@@ -92,10 +90,8 @@ index testpr
 {
 	source			= test1
 	path			= <data_path/>/testpr
-	charset_type	= utf-8
 	expand_keywords	= 1
 	min_prefix_len	= 2
-	enable_star		= 1
 }
 
 # test plain expanded index
@@ -103,12 +99,45 @@ index testple
 {
 	source			= test1
 	path			= <data_path/>/testple
-	charset_type	= utf-8
 	docinfo			= extern
 	dict			= keywords
 	expand_keywords	= 1
 	min_infix_len	= 2
-	enable_star		= 1
+}
+
+source src_plain_ckw
+{
+	type			= mysql
+	<sql_settings/>
+	sql_query_pre	= set names utf8
+	sql_query		= select 1 as id, 11 as idd, 'фичин баг, но не фичина бага' as title
+	sql_attr_uint	= idd
+}
+
+index plain_ckw
+{
+	source			= src_plain_ckw
+	dict			= keywords
+	path			= <data_path/>/plain_ckw
+	morphology		= lemmatize_en_all, lemmatize_ru_all
+}
+
+index rt_ckw
+{
+    type            = rt
+    dict            = keywords
+    path            = <data_path/>/rt_ckw
+    rt_attr_uint    = idd
+    rt_field        = title
+	morphology		= lemmatize_en_all, lemmatize_ru_all
+}
+
+
+index tmpl_ckw
+{
+	type			= template
+	dict			= keywords
+	morphology		= lemmatize_en_all, lemmatize_ru_all
 }
 
 </config>
@@ -159,6 +188,29 @@ CREATE TABLE test_table
 <sphinxql>SELECT id,gid,weight() as my_weight FROM META:plain WHERE MATCH('"english text"') option ranker=sph04;show meta</sphinxql>
 <sphinxql>SELECT id,gid,weight() as my_weight FROM META:plain WHERE MATCH('"Фичин баг"') option ranker=sph04;show meta</sphinxql>
 <sphinxql>SELECT GROUPBY() FROM testw</sphinxql>
+
+<!--regression lemmas at call keywords output -->
+<sphinxql>INSERT INTO rt_ckw VALUES ( 1, 'фичин баг, но не фичина бага', 11 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'фичин баг', 'plain_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'фичин баг', 'rt_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'фичин баг', 'tmpl_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'фичина бага', 'plain_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'фичина бага', 'rt_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'фичина бага', 'tmpl_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'сталин жил', 'plain_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'сталин жил', 'rt_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'сталин жил', 'tmpl_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'DovE', 'plain_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'DovE', 'rt_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'DovE', 'tmpl_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'records recorded recording men man mans mens', 'plain_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'records recorded recording men man mans mens', 'rt_ckw', 1 )</sphinxql>
+<sphinxql>CALL KEYWORDS ( 'records recorded recording men man mans mens', 'tmpl_ckw', 1 )</sphinxql>
+
+<!-- field-start, field-end escaping test -->
+<sphinxql>SET profiling=1</sphinxql>
+<sphinxql>SELECT id FROM testw WHERE MATCH('\\^one\\$') limit 1</sphinxql>
+<sphinxql>SHOW PLAN</sphinxql>
 
 </sphqueries>
 

@@ -1,10 +1,10 @@
 //
-// $Id: sphinxclient.c 4097 2013-08-20 09:28:24Z kevg $
+// $Id: sphinxclient.c 4885 2015-01-20 07:02:07Z deogar $
 //
 
 //
-// Copyright (c) 2001-2013, Andrew Aksyonoff
-// Copyright (c) 2008-2013, Sphinx Technologies Inc
+// Copyright (c) 2001-2015, Andrew Aksyonoff
+// Copyright (c) 2008-2015, Sphinx Technologies Inc
 // All rights reserved
 //
 // This program is free software; you can redistribute it and/or modify
@@ -12,6 +12,11 @@
 // have received a copy of the LGPL license along with this program; if you
 // did not, you can find it at http://www.gnu.org/
 //
+
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//							WARNING
+// We strongly recommend you to use SphinxQL instead of an API
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 #ifdef _WIN32
 #if _MSC_VER>=1400
@@ -525,9 +530,11 @@ sphinx_bool sphinx_set_max_query_time ( sphinx_client * client, int max_query_ti
 	return SPH_TRUE;
 }
 
-
+// DEPRECATED
 sphinx_bool sphinx_set_match_mode ( sphinx_client * client, int mode )
 {
+	fprintf ( stderr, "DEPRECATED: Do not call this method or, even better, use SphinxQL instead of an API\n" );
+
 	if ( !client || mode<SPH_MATCH_ALL || mode>SPH_MATCH_EXTENDED2 ) // FIXME?
 	{
 		set_error ( client, "invalid arguments (matching mode %d out of bounds)", mode );
@@ -858,10 +865,12 @@ sphinx_bool sphinx_set_retries ( sphinx_client * client, int count, int delay )
 	return SPH_TRUE;
 }
 
-
+// DEPRECATED
 sphinx_bool sphinx_add_override ( sphinx_client * client, const char * attr, const sphinx_uint64_t * docids, int num_values, const unsigned int * values )
 {
 	struct st_override * p;
+
+	fprintf ( stderr, "DEPRECATED: Do not call this method. Use SphinxQL REMAP() function instead.\n" );
 
 	if ( !client )
 		return SPH_FALSE;
@@ -2663,5 +2672,5 @@ void sphinx_status_destroy ( char ** status, int num_rows, int num_cols )
 }
 
 //
-// $Id: sphinxclient.c 4097 2013-08-20 09:28:24Z kevg $
+// $Id: sphinxclient.c 4885 2015-01-20 07:02:07Z deogar $
 //

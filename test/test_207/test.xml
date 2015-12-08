@@ -32,7 +32,6 @@ index test1
 {
 	source			= test1
 	path			= <data_path/>/test1
-	charset_type	= utf-8
 	morphology		= lemmatize_ru_all
 	blend_chars		= @, .
 	wordforms		= <this_test/>/wordforms.txt
@@ -62,7 +61,6 @@ index testrt1
 {
 	type			= rt
 	path			= <data_path/>/testrt1
-	charset_type	= utf-8
 	morphology		= lemmatize_ru_all
 	blend_chars		= @, .
 	wordforms		= <this_test/>/wordforms.txt
@@ -89,9 +87,7 @@ index stalin_plain
 {
 	source			= stalin_src
 	path			= <data_path/>/stalin_plain
-	charset_type	= utf-8
 	morphology		= lemmatize_ru
-	enable_star		= 1
 	min_infix_len	= 2
 	expand_keywords	= 1	
 }
@@ -100,10 +96,8 @@ index stalin_rt
 {
 	type			= rt
 	path			= <data_path/>/stalin_rt
-	charset_type	= utf-8
 	morphology		= lemmatize_ru_all
 	dict			= keywords
-	enable_star		= 1
 	min_infix_len	= 2
 	expand_keywords	= 1
 	rt_field		= text
@@ -116,10 +110,179 @@ index crash_idx
 	path			= <data_path/>/crash_idx
 	rt_field		= query
 	rt_attr_bigint	= rating
-	charset_type	= utf-8
 	morphology		= stem_en, lemmatize_ru_all
 	wordforms		= <this_test/>/wordforms2.txt
 }
+
+source test_wf
+{
+	type			= mysql
+	<sql_settings/>
+	sql_query_pre	= set names utf8
+	sql_query		= select 1 id, 11 gid, 'камеди full source' UNION select 2 id, 11 gid, 'comedi central' UNION select 3 id, 11 gid, 'pop idol'
+	sql_attr_uint	= gid
+}
+
+index test_wf1
+{
+	source			= test_wf
+	path			= <data_path/>/test_wf1
+	morphology		= stem_en, lemmatize_ru_all
+	wordforms		= <this_test/>/wordforms3.txt
+	dict                = keywords
+	min_prefix_len 		= 2
+}
+index test_wf2
+{
+	source			= test_wf
+	path			= <data_path/>/test_wf2
+	morphology		= stem_en, lemmatize_ru_all
+	wordforms		= <this_test/>/wordforms3.txt
+	dict                = keywords
+}
+
+source test_quorum
+{
+	type			= mysql
+	<sql_settings/>
+	sql_query_pre	= set names utf8
+	sql_query		= select 1 id, 11 gid,'1' docid,  'Иван Иванович меняет песенка' text UNION select 2 id, 11 gid, '1' docid,  'Иванович песенка' text
+	sql_attr_uint	= gid
+}
+
+index test_quorum
+{
+	source			= test_quorum
+	path			= <data_path/>/test_quorum
+	morphology		= lemmatize_ru_all
+	dict                = keywords
+	index_exact_words = 1
+}
+
+source test_lemmas
+{
+	type			= mysql
+	<sql_settings/>
+	sql_query_pre	= set names utf8
+	sql_query		= select 1 id, 11 gid,'1' docid,  'так Иван Иванович меняет вот' title, 'Иван Иванович меняет вот' body
+	sql_attr_uint	= gid
+}
+
+index test_lemmas
+{
+	source			= test_lemmas
+	path			= <data_path/>/test_lemmas
+	charset_type	= utf-8
+	morphology		= lemmatize_ru_all
+	dict            = keywords
+}
+
+source test_lemmas1
+{
+	type			= mysql
+	<sql_settings/>
+	sql_query_pre	= set names utf8
+	sql_query		= select 1 id, 11 gid,'1' docid,  'так Иван Иванович меняет вот.да' title, 'Иван Иванович меняет вот.да' body
+	sql_attr_uint	= gid
+}
+
+index test_lemmas1
+{
+	source			= test_lemmas1
+	path			= <data_path/>/test_lemmas1
+	charset_type	= utf-8
+	morphology		= lemmatize_ru_all
+	dict            = keywords
+	blend_chars		= .
+}
+
+source test_lemmas2
+{
+	type			= mysql
+	<sql_settings/>
+	sql_query_pre	= set names utf8
+	sql_query		= select 1 id, 11 gid,'1' docid,  'так Иван Иванович меняет да.вот' title, 'Иван Иванович меняет да.вот' body
+	sql_attr_uint	= gid
+}
+
+index test_lemmas2
+{
+	source			= test_lemmas2
+	path			= <data_path/>/test_lemmas2
+	charset_type	= utf-8
+	morphology		= lemmatize_ru_all
+	dict            = keywords
+	blend_chars		= .
+}
+
+source src_stop10
+{
+	type			= mysql
+	<sql_settings/>
+	sql_query		= SELECT 1, 11 as idd, 'поглазова ответы' as text UNION SELECT 2, 22 as idd, 'kPMHkQCFrL' as text
+	sql_query_pre = SET NAMES utf8
+	sql_attr_uint = idd
+}
+
+index test_stop10
+{
+	source			= src_stop10
+	path			= <data_path/>/test_stop10
+	dict			= keywords
+	charset_type 	= utf-8
+	charset_table 	= 0..9, A..Z->a..z, _, ., -, a..z, U+410..U+42F->U+430..U+44F, U+430..U+44F, U+0401->U+0435, U+0451->U+0435 
+	morphology 		= lemmatize_ru_all, stem_enru
+	index_exact_words = 1
+}
+
+source src_all11
+{
+	type			= mysql
+	<sql_settings/>
+	sql_query		= SELECT 1, 11 as idd, 'секс' as text UNION SELECT 2, 22 as idd, 'себульба' as text
+	sql_query_pre = SET NAMES utf8
+	sql_attr_uint = idd
+}
+
+index test_all11
+{
+	source			= src_all11
+	path			= <data_path/>/test_all11
+	dict			= keywords
+	charset_type 	= utf-8
+	charset_table 	= 0..9, A..Z->a..z, _, ., -, a..z, U+410..U+42F->U+430..U+44F, U+430..U+44F, U+0401->U+0435, U+0451->U+0435 
+	morphology 		= lemmatize_ru_all, stem_enru
+	min_prefix_len	= 2
+	enable_star		= 1
+}
+
+source test_en_all
+{
+	type			= mysql
+	<sql_settings/>
+	sql_query_pre	= set names utf8
+	sql_query		= select 1 id, 11 idd, 'told me stops' body
+	sql_attr_uint	= idd
+}
+
+
+index test_en_all
+{
+	source			= test_en_all
+	dict			= keywords
+	path			= <data_path/>/test_en_all
+	morphology		= lemmatize_en_all
+}
+
+index test_en_all1
+{
+	source			= test_en_all
+	dict			= keywords
+	path			= <data_path/>/test_en_all1
+	morphology		= lemmatize_en_all
+	index_exact_words = 1
+}
+
 </config>
 
 <db_create>
@@ -328,6 +491,65 @@ CREATE TABLE test_table
 <sphinxql>SHOW META</sphinxql>
 
 <sphinxql>SELECT id FROM crash_idx WHERE MATCH('"DOG 13"')</sphinxql>
+
+<!--regression wordforms at different stages vs AOT -->
+<sphinxql>SELECT id,gid,weight() w FROM test_wf1 WHERE MATCH('камеди');show meta</sphinxql>
+<sphinxql>SELECT id,gid,weight() w FROM test_wf2 WHERE MATCH('камеди');show meta</sphinxql>
+<sphinxql>SELECT id,gid,weight() w FROM test_wf1 WHERE MATCH('comedi');show meta</sphinxql>
+<sphinxql>SELECT id,gid,weight() w FROM test_wf2 WHERE MATCH('comedi');show meta</sphinxql>
+<sphinxql>SELECT id,gid,weight() w FROM test_wf1 WHERE MATCH('pop');show meta</sphinxql>
+<sphinxql>SELECT id,gid,weight() w FROM test_wf2 WHERE MATCH('pop');show meta</sphinxql>
+
+<!--regression quorum vs AOT -->
+<sphinxql>SELECT id  FROM test_quorum WHERE MATCH(' "меняет песенка Иван"/2 (@docid 1)');show meta</sphinxql>
+
+<sphinxql>SET profiling=1</sphinxql>
+<sphinxql>SELECT id, WEIGHT() FROM test1 WHERE MATCH('^ попил $');</sphinxql>
+<sphinxql>SHOW PLAN;</sphinxql>
+<sphinxql>SELECT id, WEIGHT() FROM test1 WHERE MATCH('попил');</sphinxql>
+<sphinxql>SHOW PLAN;</sphinxql>
+<sphinxql>SELECT id, WEIGHT() FROM test1 WHERE MATCH('попил^1.234');</sphinxql>
+<sphinxql>SHOW PLAN;</sphinxql>
+<sphinxql>SELECT id, WEIGHT() FROM test1 WHERE MATCH('попил$^1.234');</sphinxql>
+<sphinxql>SHOW PLAN;</sphinxql>
+<sphinxql>SELECT id, WEIGHT() FROM test1 WHERE MATCH('попил^1.234$');</sphinxql>
+<sphinxql>SHOW PLAN;</sphinxql>
+
+<!--regression lemmas vs tail hit -->
+<sphinxql>SELECT *, weight() w FROM test_lemmas WHERE MATCH('вот'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas WHERE MATCH('@title вот'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas WHERE MATCH('@body вот'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas1 WHERE MATCH('вот'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas1 WHERE MATCH('@title вот'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas1 WHERE MATCH('@body вот'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas1 WHERE MATCH('вот.да'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas1 WHERE MATCH('(@title вот.да)'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas1 WHERE MATCH('(@body вот.да)'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas2 WHERE MATCH('вот'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas2 WHERE MATCH('@title вот'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas2 WHERE MATCH('@body вот'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas2 WHERE MATCH('да.вот'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas2 WHERE MATCH('(@title да.вот)'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_lemmas2 WHERE MATCH('(@body да.вот)'); show meta</sphinxql>
+
+<!-- regression exceptions vs no hits -->
+<sphinxql>SELECT *, weight() w FROM test_stop10 WHERE MATCH('поглазова')</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_stop10 WHERE MATCH('kPMHkQCFrL')</sphinxql>
+
+<!-- regression missed index_exact_words vs morphology and substring -->
+<sphinxql>SELECT *, weight() w FROM test_all11 WHERE MATCH('се*'); show meta</sphinxql>
+<sphinxql>SELECT *, weight() w FROM test_all11 WHERE MATCH('^се*'); show meta</sphinxql>
+
+<!-- regression missed index_exact_words vs lemmatizer_all -->
+<sphinxql>SELECT id FROM test_en_all WHERE MATCH('told me'); show meta</sphinxql>
+<sphinxql>SELECT id FROM test_en_all WHERE MATCH('=stops'); show meta</sphinxql>
+<sphinxql>SELECT id FROM test_en_all WHERE MATCH('=stop'); show meta</sphinxql>
+<sphinxql>SELECT id FROM test_en_all WHERE MATCH('stops'); show meta</sphinxql>
+<sphinxql>SELECT id FROM test_en_all WHERE MATCH('stop'); show meta</sphinxql>
+<sphinxql>SELECT id FROM test_en_all1 WHERE MATCH('=stops'); show meta</sphinxql>
+<sphinxql>SELECT id FROM test_en_all1 WHERE MATCH('=stop'); show meta</sphinxql>
+<sphinxql>SELECT id FROM test_en_all1 WHERE MATCH('stops'); show meta</sphinxql>
+<sphinxql>SELECT id FROM test_en_all1 WHERE MATCH('stop'); show meta</sphinxql>
 
 </sphqueries>
 

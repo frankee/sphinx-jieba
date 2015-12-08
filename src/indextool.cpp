@@ -1,10 +1,10 @@
 //
-// $Id: indextool.cpp 4238 2013-10-08 12:49:23Z tomat $
+// $Id: indextool.cpp 4885 2015-01-20 07:02:07Z deogar $
 //
 
 //
-// Copyright (c) 2001-2013, Andrew Aksyonoff
-// Copyright (c) 2008-2013, Sphinx Technologies Inc
+// Copyright (c) 2001-2015, Andrew Aksyonoff
+// Copyright (c) 2008-2015, Sphinx Technologies Inc
 // All rights reserved
 //
 // This program is free software; you can redistribute it and/or modify
@@ -107,10 +107,6 @@ void CharsetFold ( CSphIndex * pIndex, FILE * fp )
 {
 	CSphVector<BYTE> sBuf1 ( 16384 );
 	CSphVector<BYTE> sBuf2 ( 16384 );
-
-	bool bUtf = pIndex->GetTokenizer()->IsUtf8();
-	if ( !bUtf )
-		sphDie ( "sorry, --fold vs SBCS is not supported just yet" );
 
 	CSphLowercaser tLC = pIndex->GetTokenizer()->GetLowercaser();
 
@@ -474,7 +470,7 @@ bool BuildIDF ( const CSphString & sFilename, const CSphVector<CSphString> & dFi
 					if ( !bSkipUnique || iDocs>1 )
 					{
 						IDFWord_t & tEntry = dEntries.Add ();
-						tEntry.m_uWordID = sphFNV64 ( (BYTE*)sWord );
+						tEntry.m_uWordID = sphFNV64 ( sWord );
 						tEntry.m_iDocs = iDocs;
 						iTotalWords++;
 					} else
@@ -853,7 +849,7 @@ int main ( int argc, char ** argv )
 		OPT1 ( "--dumpheader" )		{ eCommand = CMD_DUMPHEADER; sDumpHeader = argv[++i]; }
 		OPT1 ( "--dumpconfig" )		{ eCommand = CMD_DUMPCONFIG; sDumpHeader = argv[++i]; }
 		OPT1 ( "--dumpdocids" )		{ eCommand = CMD_DUMPDOCIDS; sIndex = argv[++i]; }
-		OPT1 ( "--check" )			{ eCommand = CMD_CHECK; sIndex = argv[++i]; sphSetDebugCheck(); }
+		OPT1 ( "--check" )			{ eCommand = CMD_CHECK; sIndex = argv[++i]; }
 		OPT1 ( "--rotate" )			{ bRotate = true; }
 		OPT1 ( "--htmlstrip" )		{ eCommand = CMD_STRIP; sIndex = argv[++i]; }
 		OPT1 ( "--build-infixes" )	{ eCommand = CMD_BUILDINFIXES; sIndex = argv[++i]; }
@@ -952,22 +948,19 @@ int main ( int argc, char ** argv )
 	// load proper config
 	//////////////////////
 
+	CSphString sError;
+	if ( !sphInitCharsetAliasTable ( sError ) )
+		sphDie ( "failed to init charset alias table: %s", sError.cstr() );
+
 	CSphConfigParser cp;
 	CSphConfig & hConf = cp.m_tConf;
 	for ( ;; )
 	{
-		if ( ( eCommand==CMD_DUMPHEADER || eCommand==CMD_DUMPCONFIG ) && sDumpHeader.Ends ( ".sph" ) )
-			break;
-
 		if ( eCommand==CMD_BUILDIDF || eCommand==CMD_MERGEIDF )
 			break;
 
-		if ( eCommand==CMD_DUMPDICT )
-		{
-			if ( sDumpDict.Ends ( ".spi" ) )
-				break;
-			sIndex = sDumpDict;
-		}
+		if ( eCommand==CMD_DUMPDICT && !sDumpDict.Ends ( ".spi" ) )
+				sIndex = sDumpDict;
 
 		sphLoadConfig ( sOptConfig, bQuiet, cp );
 		break;
@@ -976,6 +969,16 @@ int main ( int argc, char ** argv )
 	///////////
 	// action!
 	///////////
+	int iMvaDefault = 1048576;
+	if ( hConf.Exists ( "searchd" ) && hConf["searchd"].Exists ( "searchd" ) )
+	{
+		const CSphConfigSection & hSearchd = hConf["searchd"]["searchd"];
+		iMvaDefault = hSearchd.GetSize ( "mva_updates_pool", iMvaDefault );
+	}
+	const char * sArenaError = sphArenaInit ( iMvaDefault );
+	if ( sArenaError )
+		sphWarning ( "process shared mutex unsupported, persist MVA disabled ( %s )", sArenaError );
+
 
 	if ( eCommand==CMD_CHECKCONFIG )
 	{
@@ -989,11 +992,11 @@ int main ( int argc, char ** argv )
 		while ( hIndexes.IterateNext() )
 		{
 			const CSphConfigSection & tIndex = hIndexes.IterateGet();
-			const CSphString * pPath = tIndex ( "path" );
+			const CSphVariant * pPath = tIndex ( "path" );
 			if ( !pPath )
 				continue;
 
-			const CSphString * pType = tIndex ( "type" );
+			const CSphVariant * pType = tIndex ( "type" );
 			if ( pType && ( *pType=="rt" || *pType=="distributed" ) )
 				continue;
 
@@ -1071,9 +1074,8 @@ int main ( int argc, char ** argv )
 		if ( !pIndex )
 			sphDie ( "index '%s': failed to create (%s)", sIndex.cstr(), sError.cstr() );
 
-		// don't need any long load operations
-		// but not for dict=keywords + infix
-		pIndex->SetWordlistPreload ( bDictKeywords );
+		if ( eCommand==CMD_CHECK )
+			pIndex->SetDebugCheck();
 
 		CSphString sWarn;
 		if ( !pIndex->Prealloc ( false, bStripPath, sWarn ) )
@@ -1089,7 +1091,7 @@ int main ( int argc, char ** argv )
 		{
 			CSphIndexSettings tSettings = pIndex->GetSettings();
 
-			const CSphString & sValue = hConf["index"][sIndex]["hitless_words"];
+			const CSphString & sValue = hConf["index"][sIndex]["hitless_words"].strval();
 			if ( sValue=="all" )
 			{
 				tSettings.m_eHitless = SPH_HITLESS_ALL;
@@ -1158,8 +1160,6 @@ int main ( int argc, char ** argv )
 				if ( !pIndex )
 					sphDie ( "index '%s': failed to create (%s)", sIndex.cstr(), sError.cstr() );
 
-				pIndex->SetWordlistPreload ( true );
-
 				CSphString sWarn;
 				if ( !pIndex->Prealloc ( false, bStripPath, sWarn ) )
 					sphDie ( "index '%s': prealloc failed: %s\n", sIndex.cstr(), pIndex->GetLastError().cstr() );
@@ -1182,6 +1182,7 @@ int main ( int argc, char ** argv )
 				return iCheckErrno;
 			if ( bRotate )
 			{
+				pIndex->Dealloc();
 				sNewIndex.SetSprintf ( "%s.new", hConf["index"][sIndex]["path"].cstr() );
 				if ( !pIndex->Rename ( sNewIndex.cstr() ) )
 					sphDie ( "index '%s': rotate failed: %s\n", sIndex.cstr(), pIndex->GetLastError().cstr() );
@@ -1233,7 +1234,7 @@ int main ( int argc, char ** argv )
 		{
 			CSphString sError;
 			if ( !BuildIDF ( sOut, dFiles, sError, bSkipUnique ) )
-				fprintf ( stdout, "ERROR: %s\n", sError.cstr() );
+				sphDie ( "ERROR: %s\n", sError.cstr() );
 			break;
 		}
 
@@ -1241,7 +1242,7 @@ int main ( int argc, char ** argv )
 		{
 			CSphString sError;
 			if ( !MergeIDF ( sOut, dFiles, sError, bSkipUnique ) )
-				fprintf ( stdout, "ERROR: %s\n", sError.cstr() );
+				sphDie ( "ERROR: %s\n", sError.cstr() );
 			break;
 		}
 
@@ -1268,5 +1269,5 @@ int main ( int argc, char ** argv )
 }
 
 //
-// $Id: indextool.cpp 4238 2013-10-08 12:49:23Z tomat $
+// $Id: indextool.cpp 4885 2015-01-20 07:02:07Z deogar $
 //

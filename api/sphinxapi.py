@@ -1,11 +1,11 @@
 #
-# $Id: sphinxapi.py 4097 2013-08-20 09:28:24Z kevg $
+# $Id: sphinxapi.py 4885 2015-01-20 07:02:07Z deogar $
 #
 # Python version of Sphinx searchd client (Python API)
 #
 # Copyright (c) 2006, Mike Osadnik
-# Copyright (c) 2006-2013, Andrew Aksyonoff
-# Copyright (c) 2008-2013, Sphinx Technologies Inc
+# Copyright (c) 2006-2015, Andrew Aksyonoff
+# Copyright (c) 2008-2015, Sphinx Technologies Inc
 # All rights reserved
 #
 # This program is free software; you can redistribute it and/or modify
@@ -13,6 +13,11 @@
 # received a copy of the GPL license along with this program; if you
 # did not, you can find it at http://www.gnu.org/
 #
+
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#			WARNING
+# We strongly recommend you to use SphinxQL instead of the API
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 import sys
 import select
@@ -343,6 +348,7 @@ class SphinxClient:
 		"""
 		Set matching mode.
 		"""
+		print >> sys.stderr, 'DEPRECATED: Do not call this method or, even better, use SphinxQL instead of an API'
 		assert(mode in [SPH_MATCH_ALL, SPH_MATCH_ANY, SPH_MATCH_PHRASE, SPH_MATCH_BOOLEAN, SPH_MATCH_EXTENDED, SPH_MATCH_FULLSCAN, SPH_MATCH_EXTENDED2])
 		self._mode = mode
 
@@ -484,6 +490,7 @@ class SphinxClient:
 
 
 	def SetOverride (self, name, type, values):
+		print >> sys.stderr, 'DEPRECATED: Do not call this method. Use SphinxQL REMAP() function instead.'
 		assert(isinstance(name, str))
 		assert(type in SPH_ATTR_TYPES)
 		assert(isinstance(values, dict))
@@ -1182,7 +1189,7 @@ class SphinxClient:
 		self._socket = None
 	
 	def EscapeString(self, string):
-		return re.sub(r"([=\(\)|\-!@~\"&/\\\^\$\=])", r"\\\1", string)
+		return re.sub(r"([=\(\)|\-!@~\"&/\\\^\$\=\<])", r"\\\1", string)
 
 
 	def FlushAttributes(self):
@@ -1220,5 +1227,5 @@ def SetBit ( flag, bit, on ):
 
 	
 #
-# $Id: sphinxapi.py 4097 2013-08-20 09:28:24Z kevg $
+# $Id: sphinxapi.py 4885 2015-01-20 07:02:07Z deogar $
 #

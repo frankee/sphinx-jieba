@@ -1,10 +1,10 @@
 //
-// $Id: sphinxsearch.h 4111 2013-08-24 08:44:44Z kevg $
+// $Id: sphinxsearch.h 4929 2015-03-04 07:43:10Z tomat $
 //
 
 //
-// Copyright (c) 2001-2013, Andrew Aksyonoff
-// Copyright (c) 2008-2013, Sphinx Technologies Inc
+// Copyright (c) 2001-2015, Andrew Aksyonoff
+// Copyright (c) 2008-2015, Sphinx Technologies Inc
 // All rights reserved
 //
 // This program is free software; you can redistribute it and/or modify
@@ -25,13 +25,12 @@
 /// term modifiers
 enum TermPosFilter_e
 {
+	TERM_POS_NONE = 0,
 	TERM_POS_FIELD_LIMIT = 1,
-	TERM_POS_FIELD_START,
-	TERM_POS_FIELD_END,
-	TERM_POS_FIELD_STARTEND,
-	TERM_POS_ZONES,
-	TERM_POS_ZONESPAN,
-	TERM_POS_NONE
+	TERM_POS_FIELD_START = 2,
+	TERM_POS_FIELD_END = 3,
+	TERM_POS_FIELD_STARTEND = 4,
+	TERM_POS_ZONES = 5,
 };
 
 
@@ -51,9 +50,10 @@ public:
 	// setup by query parser
 	CSphString		m_sWord;		///< my copy of word
 	CSphString		m_sDictWord;	///< word after being processed by dict (eg. stemmed)
-	SphWordID_t		m_iWordID;		///< word ID, from dictionary
-	int				m_iTermPos;
+	SphWordID_t		m_uWordID;		///< word ID, from dictionary
+	TermPosFilter_e	m_iTermPos;
 	int				m_iAtomPos;		///< word position, from query
+	float			m_fBoost;		///< IDF keyword boost (multiplier)
 	bool			m_bExpanded;	///< added by prefix expansion
 	bool			m_bExcluded;	///< excluded by the query (rval to operator NOT)
 
@@ -73,9 +73,10 @@ protected:
 
 public:
 	ISphQword ()
-		: m_iWordID ( 0 )
-		, m_iTermPos ( 0 )
+		: m_uWordID ( 0 )
+		, m_iTermPos ( TERM_POS_NONE )
 		, m_iAtomPos ( 0 )
+		, m_fBoost ( 1.0f )
 		, m_bExpanded ( false )
 		, m_bExcluded ( false )
 		, m_iDocs ( 0 )
@@ -118,7 +119,7 @@ public:
 	const CSphIndex *		m_pIndex;
 	ESphDocinfo				m_eDocinfo;
 	const CSphRowitem *		m_pMinRow;
-	SphDocID_t				m_iMinDocid;
+	SphDocID_t				m_uMinDocid;
 	int						m_iInlineRowitems;		///< inline rowitems count
 	int						m_iDynamicRowitems;		///< dynamic rowitems counts (including (!) inline)
 	int64_t					m_iMaxTimer;
@@ -134,7 +135,7 @@ public:
 		, m_pIndex ( NULL )
 		, m_eDocinfo ( SPH_DOCINFO_NONE )
 		, m_pMinRow ( NULL )
-		, m_iMinDocid ( 0 )
+		, m_uMinDocid ( 0 )
 		, m_iInlineRowitems ( 0 )
 		, m_iDynamicRowitems ( 0 )
 		, m_iMaxTimer ( 0 )
@@ -214,5 +215,5 @@ public:
 #endif // _sphinxsearch_
 
 //
-// $Id: sphinxsearch.h 4111 2013-08-24 08:44:44Z kevg $
+// $Id: sphinxsearch.h 4929 2015-03-04 07:43:10Z tomat $
 //

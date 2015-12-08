@@ -1,10 +1,10 @@
 //
-// $Id: test.c 3711 2013-02-26 05:43:37Z klirichek $
+// $Id: test.c 4885 2015-01-20 07:02:07Z deogar $
 //
 
 //
-// Copyright (c) 2001-2013, Andrew Aksyonoff
-// Copyright (c) 2008-2013, Sphinx Technologies Inc
+// Copyright (c) 2001-2015, Andrew Aksyonoff
+// Copyright (c) 2008-2015, Sphinx Technologies Inc
 // All rights reserved
 //
 // This program is free software; you can redistribute it and/or modify
@@ -523,5 +523,5 @@ int main ( int argc, char ** argv )
 }
 
 //
-// $Id: test.c 3711 2013-02-26 05:43:37Z klirichek $
+// $Id: test.c 4885 2015-01-20 07:02:07Z deogar $
 //

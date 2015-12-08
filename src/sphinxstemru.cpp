@@ -1,10 +1,10 @@
 //
-// $Id: sphinxstemru.cpp 3711 2013-02-26 05:43:37Z klirichek $
+// $Id: sphinxstemru.cpp 4885 2015-01-20 07:02:07Z deogar $
 //
 
 //
-// Copyright (c) 2001-2013, Andrew Aksyonoff
-// Copyright (c) 2008-2013, Sphinx Technologies Inc
+// Copyright (c) 2001-2015, Andrew Aksyonoff
+// Copyright (c) 2008-2015, Sphinx Technologies Inc
 // All rights reserved
 //
 // This program is free software; you can redistribute it and/or modify
@@ -15,56 +15,6 @@
 
 #include "sphinx.h"
 #include <string.h>
-
-/////////////////////////////////////////////////////////////////////////////
-// SBCS windows-1251 implementation
-/////////////////////////////////////////////////////////////////////////////
-
-struct RussianAlphabetWin1251_t
-{
-	enum
-	{
-		A	= 0xE0,
-		B	= 0xE1,
-		V	= 0xE2,
-		G	= 0xE3,
-		D	= 0xE4,
-		E	= 0xE5,
-		YO	= 0xB8,
-		ZH	= 0xE6,
-		Z	= 0xE7,
-		I	= 0xE8,
-		IY	= 0xE9,
-		K	= 0xEA,
-		L	= 0xEB,
-		M	= 0xEC,
-		N	= 0xED,
-		O	= 0xEE,
-		P	= 0xEF,
-		R	= 0xF0,
-		S	= 0xF1,
-		T	= 0xF2,
-		U	= 0xF3,
-		F	= 0xF4,
-		H	= 0xF5,
-		TS	= 0xF6,
-		CH	= 0xF7,
-		SH	= 0xF8,
-		SCH	= 0xF9,
-		TVY	= 0xFA, // TVYordiy znak
-		Y	= 0xFB,
-		MYA	= 0xFC, // MYAgkiy znak
-		EE	= 0xFD,
-		YU	= 0xFE,
-		YA	= 0xFF
-	};
-};
-
-#define LOC_CHAR_TYPE		unsigned char
-#define LOC_PREFIX(_a)		_a##_cp1251
-#define RUS					RussianAlphabetWin1251_t
-
-#include "sphinxstemru.inl"
 
 /////////////////////////////////////////////////////////////////////////////
 // UTF-8 implementation
@@ -162,10 +112,9 @@ struct RussianAlphabetUTF8_t
 
 void stem_ru_init ()
 {
-	stem_ru_init_cp1251 ();
 	stem_ru_init_utf8 ();
 }
 
 //
-// $Id: sphinxstemru.cpp 3711 2013-02-26 05:43:37Z klirichek $
+// $Id: sphinxstemru.cpp 4885 2015-01-20 07:02:07Z deogar $
 //

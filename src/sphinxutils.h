@@ -1,10 +1,10 @@
 //
-// $Id: sphinxutils.h 4117 2013-08-26 12:01:41Z klirichek $
+// $Id: sphinxutils.h 4885 2015-01-20 07:02:07Z deogar $
 //
 
 //
-// Copyright (c) 2001-2013, Andrew Aksyonoff
-// Copyright (c) 2008-2013, Sphinx Technologies Inc
+// Copyright (c) 2001-2015, Andrew Aksyonoff
+// Copyright (c) 2008-2015, Sphinx Technologies Inc
 // All rights reserved
 //
 // This program is free software; you can redistribute it and/or modify
@@ -55,6 +55,9 @@ inline bool sphIsWild ( char c )
 /// string splitter, extracts sequences of alphas (as in sphIsAlpha)
 void sphSplit ( CSphVector<CSphString> & dOut, const char * sIn );
 
+/// string splitter, splits by the given boundaries
+void sphSplit ( CSphVector<CSphString> & dOut, const char * sIn, const char * sBounds );
+
 /// string wildcard matching (case-sensitive, supports * and ? patterns)
 bool sphWildcardMatch ( const char * sSstring, const char * sPattern );
 
@@ -86,7 +89,7 @@ public:
 	const char * GetStr ( const char * sKey, const char * sDefault="" ) const
 	{
 		CSphVariant * pEntry = (*this)( sKey );
-		return pEntry ? pEntry->cstr() : sDefault;
+		return pEntry ? pEntry->strval().cstr() : sDefault;
 	}
 
 	/// get size option (plain int, or with K/M prefix) value by key and default value
@@ -131,22 +134,16 @@ protected:
 	bool			AddSection ( const char * sType, const char * sSection );
 	void			AddKey ( const char * sKey, char * sValue );
 	bool			ValidateKey ( const char * sKey );
-
-#if !USE_WINDOWS
-	bool			TryToExec ( char * pBuffer, const char * szFilename, CSphVector<char> & dResult );
-#endif
 	char *			GetBufferString ( char * szDest, int iMax, const char * & szSource );
 };
 
-#if !USE_WINDOWS
 bool TryToExec ( char * pBuffer, const char * szFilename, CSphVector<char> & dResult, char * sError, int iErrorLen );
-#endif
 
 /////////////////////////////////////////////////////////////////////////////
 
 enum
 {
-	TOKENIZER_SBCS		= 1,
+	// where was TOKENIZER_SBCS=1 once
 	TOKENIZER_UTF8		= 2,
 	TOKENIZER_NGRAM	= 3
 };
@@ -155,7 +152,7 @@ enum
 const char *	sphLoadConfig ( const char * sOptConfig, bool bQuiet, CSphConfigParser & cp );
 
 /// configure tokenizer from index definition section
-bool			sphConfTokenizer ( const CSphConfigSection & hIndex, CSphTokenizerSettings & tSettings, CSphString & sError );
+void			sphConfTokenizer ( const CSphConfigSection & hIndex, CSphTokenizerSettings & tSettings );
 
 /// configure dictionary from index definition section
 void			sphConfDictionary ( const CSphConfigSection & hIndex, CSphDictSettings & tSettings );
@@ -168,6 +165,8 @@ bool			sphConfIndex ( const CSphConfigSection & hIndex, CSphIndexSettings & tSet
 
 /// try to set dictionary, tokenizer and misc settings for an index (if not already set)
 bool			sphFixupIndexSettings ( CSphIndex * pIndex, const CSphConfigSection & hIndex, CSphString & sError, bool bTemplateDict=false );
+
+bool			sphInitCharsetAliasTable ( CSphString & sError );
 
 enum ESphLogLevel
 {
@@ -235,11 +234,42 @@ void sphCheckDuplicatePaths ( const CSphConfig & hConf );
 /// set globals from the common config section
 void sphConfigureCommon ( const CSphConfig & hConf );
 
+/// my own is chinese
+bool sphIsChineseCode ( int iCode );
+
 /// detect chinese chars in a buffer
 bool sphDetectChinese ( const BYTE * szBuffer, int iLength );
+
+/// returns ranker name as string
+const char * sphGetRankerName ( ESphRankMode eRanker );
+
+class CSphDynamicLibrary : public ISphNoncopyable
+{
+	bool		m_bReady; // whether the lib is valid or not
+	void *		m_pLibrary; // internal handle
+
+public:
+	CSphDynamicLibrary()
+		: m_bReady ( false )
+		, m_pLibrary ( NULL )
+		, m_sError ( "" )
+		{}
+	virtual ~CSphDynamicLibrary()
+	{}
+
+	bool		Init ( const char* sPath, bool bGlobal=true );
+	bool		LoadSymbol ( const char* sName, void** ppFunc );
+	bool		LoadSymbols ( const char** sNames, void*** pppFuncs, int iNum );
+
+public:
+	CSphString	m_sError;
+
+private:
+	void		FillError ( const char* sMessage=NULL );
+};
 
 #endif // _sphinxutils_
 
 //
-// $Id: sphinxutils.h 4117 2013-08-26 12:01:41Z klirichek $
+// $Id: sphinxutils.h 4885 2015-01-20 07:02:07Z deogar $
 //

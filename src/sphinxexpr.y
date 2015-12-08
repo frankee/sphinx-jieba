@@ -26,6 +26,8 @@
 %token <iAttrLocator>	TOK_ATTR_FACTORS
 %token <iFunc>			TOK_FUNC
 %token <iFunc>			TOK_FUNC_IN
+%token <iFunc>			TOK_FUNC_REMAP
+%token <iNode>			TOK_FUNC_PF
 %token <iNode>			TOK_USERVAR
 %token <iNode>			TOK_UDF
 %token <iNode>			TOK_HOOK_IDENT
@@ -64,6 +66,7 @@
 %type <sIdent>			ident
 %type <iNode>			stringlist
 %type <iNode>			json_field
+%type <iNode>			json_expr
 %type <iNode>			subkey
 %type <iNode>			subscript
 %type <iNode>			for_loop
@@ -128,7 +131,7 @@ expr:
 	| expr TOK_AND expr				{ $$ = pParser->AddNodeOp ( TOK_AND, $1, $3 ); if ( $$<0 ) YYERROR; }
 	| expr TOK_OR expr				{ $$ = pParser->AddNodeOp ( TOK_OR, $1, $3 ); if ( $$<0 ) YYERROR; }
 	| '(' expr ')'					{ $$ = $2; }
-	| json_field
+	| json_expr
 	| iterator
 	| streq
 	| json_field TOK_IS TOK_NULL			{ $$ = pParser->AddNodeOp ( TOK_IS_NULL, $1, -1); }
@@ -198,10 +201,18 @@ function:
 	| TOK_FUNC_IN '(' arg ',' constlist_or_uservar ')'{ $$ = pParser->AddNodeFunc ( $1, $3, $5 ); }
 	| TOK_HOOK_FUNC '(' arglist ')' { $$ = pParser->AddNodeHookFunc ( $1, $3 ); if ( $$<0 ) YYERROR; }
 	| TOK_FUNC '(' expr for_loop ')' { $$ = pParser->AddNodeFunc ( $1, $3, $4 ); }
+	| TOK_FUNC_REMAP '(' expr ',' expr ',' '(' constlist ')' ',' '(' constlist ')' ')' { $$ = pParser->AddNodeFunc ( $1, $3, $5, $8, $12 ); }
+	| TOK_FUNC_PF '(' ')'			{ $$ = pParser->AddNodePF ( $1, -1 ); }
+	| TOK_FUNC_PF '(' arg ')'		{ $$ = pParser->AddNodePF ( $1, $3 ); }
 	;
 
 json_field:
-	TOK_ATTR_JSON subscript			{ $$ = pParser->AddNodeJsonField ( $1, $2 ); }
+	json_expr
+	| attr
+	;
+
+json_expr:
+	TOK_ATTR_JSON subscript { $$ = pParser->AddNodeJsonField ( $1, $2 ); }
 
 subscript:
 	subkey
@@ -228,6 +239,7 @@ iterator:
 streq:
 	expr TOK_EQ strval				{ $$ = pParser->AddNodeOp ( TOK_EQ, $1, $3 ); }
 	| strval TOK_EQ expr			{ $$ = pParser->AddNodeOp ( TOK_EQ, $3, $1 ); }
+	| strval TOK_EQ strval			{ $$ = pParser->AddNodeOp ( TOK_EQ, $1, $3 ); }
 	;
 
 strval:

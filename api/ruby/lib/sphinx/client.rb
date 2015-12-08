@@ -24,6 +24,12 @@
 #   docs = posts.map(&:body)
 #   excerpts = sphinx.BuildExcerpts(docs, 'index', 'test')
 
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#							WARNING
+# We strongly recommend you to use SphinxQL instead of the API
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
 require 'socket'
 
 module Sphinx
@@ -256,8 +262,9 @@ module Sphinx
       @maxquerytime = max
     end
     
-    # Set matching mode.
+    # Set matching mode. DEPRECATED
     def SetMatchMode(mode)
+      $stderr.puts "DEPRECATED: Do not call this method or, even better, use SphinxQL instead of an API\n"
       assert { mode == SPH_MATCH_ALL \
             || mode == SPH_MATCH_ANY \
             || mode == SPH_MATCH_PHRASE \
@@ -480,11 +487,12 @@ module Sphinx
       @retrydelay = delay
     end
     
-    # Set attribute values override
+    # DEPRECATED: Set attribute values override
     #
 	  # There can be only one override per attribute.
 	  # +values+ must be a hash that maps document IDs to attribute values.
 	  def SetOverride(attrname, attrtype, values)
+      $stderr.puts "DEPRECATED: Do not call this method. Use SphinxQL REMAP() function instead.\n"
       assert { attrname.instance_of? String }
       assert { [SPH_ATTR_INTEGER, SPH_ATTR_TIMESTAMP, SPH_ATTR_BOOL, SPH_ATTR_FLOAT, SPH_ATTR_BIGINT].include?(attrtype) }
       assert { values.instance_of? Hash }

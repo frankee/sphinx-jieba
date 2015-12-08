@@ -1,10 +1,10 @@
 //
-// $Id: sphinxexpr.h 4279 2013-10-29 11:47:14Z kevg $
+// $Id: sphinxexpr.h 4885 2015-01-20 07:02:07Z deogar $
 //
 
 //
-// Copyright (c) 2001-2013, Andrew Aksyonoff
-// Copyright (c) 2008-2013, Sphinx Technologies Inc
+// Copyright (c) 2001-2015, Andrew Aksyonoff
+// Copyright (c) 2008-2015, Sphinx Technologies Inc
 // All rights reserved
 //
 // This program is free software; you can redistribute it and/or modify
@@ -34,12 +34,12 @@ enum ESphAttr
 	SPH_ATTR_NONE		= 0,			///< not an attribute at all
 	SPH_ATTR_INTEGER	= 1,			///< unsigned 32-bit integer
 	SPH_ATTR_TIMESTAMP	= 2,			///< this attr is a timestamp
-	SPH_ATTR_ORDINAL	= 3,			///< this attr is an ordinal string number (integer at search time, specially handled at indexing time)
+	// there was SPH_ATTR_ORDINAL=3 once
 	SPH_ATTR_BOOL		= 4,			///< this attr is a boolean bit field
 	SPH_ATTR_FLOAT		= 5,			///< floating point number (IEEE 32-bit)
 	SPH_ATTR_BIGINT		= 6,			///< signed 64-bit integer
 	SPH_ATTR_STRING		= 7,			///< string (binary; in-memory)
-	SPH_ATTR_WORDCOUNT	= 8,			///< string word count (only in indexer! integer at search time, but tokenized and counted at indexing time)
+	// there was SPH_ATTR_WORDCOUNT=8 once
 	SPH_ATTR_POLY2D		= 9,			///< vector of floats, 2D polygon (see POLY2D)
 	SPH_ATTR_STRINGPTR	= 10,			///< string (binary, in-memory, stored as pointer to the zero-terminated string)
 	SPH_ATTR_TOKENCOUNT	= 11,			///< field token count, 32-bit integer
@@ -52,7 +52,8 @@ enum ESphAttr
 	// used as intermediate types in the expression engine
 	SPH_ATTR_MAPARG		= 1000,
 	SPH_ATTR_FACTORS	= 1001,			///< packed search factors (binary, in-memory, pooled)
-	SPH_ATTR_JSON_FIELD	= 1002			///< points to particular field in JSON column subset
+	SPH_ATTR_JSON_FIELD	= 1002,			///< points to particular field in JSON column subset
+	SPH_ATTR_FACTORS_JSON	= 1003		///< packed search factors (binary, in-memory, pooled, provided to client json encoded)
 };
 
 /// column evaluation stage
@@ -119,9 +120,9 @@ public:
 	/// get the number of args in an arglist
 	virtual int GetNumArgs() const { return 0; }
 
-	/// run a tree wide action
+	/// run a tree wide action (1st arg is an action, 2nd is its parameter)
 	/// usually sets something into ISphExpr like string pool or gets something from it like dependent columns
-	virtual void Command ( ESphExprCommand /* eCmd */, void * /* pArg */ ) {}
+	virtual void Command ( ESphExprCommand, void * ) {}
 };
 
 /// string expression traits
@@ -194,6 +195,15 @@ struct Expr_MapArg_c : public ISphExpr
 	}
 };
 
+
+enum
+{
+	SPH_FACTOR_DISABLE		= 0,
+	SPH_FACTOR_ENABLE		= 1,
+	SPH_FACTOR_CALC_ATC		= 1 << 1,
+	SPH_FACTOR_JSON_OUT		= 1 << 2
+};
+
 /// parses given expression, builds evaluator
 /// returns NULL and fills sError on failure
 /// returns pointer to evaluator on success
@@ -203,28 +213,7 @@ struct Expr_MapArg_c : public ISphExpr
 class CSphQueryProfile;
 ISphExpr * sphExprParse ( const char * sExpr, const ISphSchema & tSchema, ESphAttr * pAttrType, bool * pUsesWeight,
 	CSphString & sError, CSphQueryProfile * pProfiler, ISphExprHook * pHook=NULL,
-	bool * pZonespanlist=NULL, bool * pPackedFactors=NULL, ESphEvalStage * pEvalStage=NULL );
-
-//////////////////////////////////////////////////////////////////////////
-
-/// initialize UDF manager
-void sphUDFInit ( const char * sUdfDir );
-
-/// enable/disable dynamic CREATE/DROP
-void sphUDFLock ( bool bLocked );
-
-/// load UDF function
-bool sphUDFCreate ( const char * szLib, const char * szFunc, ESphAttr eRetType, CSphString & sError );
-
-/// unload UDF function
-bool sphUDFDrop ( const char * szFunc, CSphString & sError );
-
-/// save SphinxQL state (ie. all active functions)
-class CSphWriter;
-void sphUDFSaveState ( CSphWriter & tWriter );
-
-/// call reinit func in every UDF lib
-void sphUDFReinit();
+	bool * pZonespanlist=NULL, DWORD * pPackedFactorsFlags=NULL, ESphEvalStage * pEvalStage=NULL );
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -249,5 +238,5 @@ float GeodistAdaptiveRad ( float lat1, float lon1, float lat2, float lon2 );
 #endif // _sphinxexpr_
 
 //
-// $Id: sphinxexpr.h 4279 2013-10-29 11:47:14Z kevg $
+// $Id: sphinxexpr.h 4885 2015-01-20 07:02:07Z deogar $
 //

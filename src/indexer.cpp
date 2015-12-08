@@ -1,10 +1,10 @@
 //
-// $Id: indexer.cpp 4301 2013-11-06 07:41:00Z tomat $
+// $Id: indexer.cpp 4889 2015-01-29 10:51:25Z tomat $
 //
 
 //
-// Copyright (c) 2001-2013, Andrew Aksyonoff
-// Copyright (c) 2008-2013, Sphinx Technologies Inc
+// Copyright (c) 2001-2015, Andrew Aksyonoff
+// Copyright (c) 2008-2015, Sphinx Technologies Inc
 // All rights reserved
 //
 // This program is free software; you can redistribute it and/or modify
@@ -17,6 +17,8 @@
 #include "sphinxint.h"
 #include "sphinxutils.h"
 #include "sphinxstem.h"
+#include "sphinxplugin.h"
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <ctype.h>
@@ -185,7 +187,7 @@ struct Word_t
 inline bool operator < ( const Word_t & a, const Word_t & b)
 {
 	return a.m_iCount < b.m_iCount;
-};
+}
 
 
 class CSphStopwordBuilderDict : public CSphDict
@@ -203,7 +205,7 @@ public:
 	virtual void		WriteStopwords ( CSphWriter & ) {}
 	virtual bool		LoadWordforms ( const CSphVector<CSphString> &, const CSphEmbeddedFiles *, const ISphTokenizer *, const char * ) { return true; }
 	virtual void		WriteWordforms ( CSphWriter & ) {}
-	virtual int			SetMorphology ( const char *, bool, CSphString & ) { return ST_OK; }
+	virtual int			SetMorphology ( const char *, CSphString & ) { return ST_OK; }
 
 	virtual void		Setup ( const CSphDictSettings & tSettings ) { m_tSettings = tSettings; }
 	virtual const CSphDictSettings & GetSettings () const { return m_tSettings; }
@@ -220,7 +222,7 @@ protected:
 	{
 		static inline DWORD Hash ( const char * sKey )
 		{
-			return sphCRC32 ( (const BYTE*)sKey );
+			return sphCRC32 ( sKey );
 		}
 	};
 
@@ -382,7 +384,7 @@ bool ParseMultiAttr ( const char * sBuf, CSphColumnInfo & tAttr, const char * sS
 // get string
 #define LOC_GETS(_arg,_key) \
 	if ( hSource.Exists(_key) ) \
-		_arg = hSource[_key];
+		_arg = hSource[_key].strval();
 
 // get int
 #define LOC_GETI(_arg,_key) \
@@ -592,22 +594,15 @@ bool SqlParamsConfigure ( CSphSourceParams_SQL & tParams, const CSphConfigSectio
 
 	LOC_GETI ( tParams.m_iRangedThrottle,	"sql_ranged_throttle" );
 
-	SqlAttrsConfigure ( tParams,	hSource("sql_group_column"),		SPH_ATTR_INTEGER,	sSourceName );
-	SqlAttrsConfigure ( tParams,	hSource("sql_date_column"),			SPH_ATTR_TIMESTAMP,	sSourceName );
-	SqlAttrsConfigure ( tParams,	hSource("sql_str2ordinal_column"),	SPH_ATTR_ORDINAL,	sSourceName );
-
 	SqlAttrsConfigure ( tParams,	hSource("sql_attr_uint"),			SPH_ATTR_INTEGER,	sSourceName );
 	SqlAttrsConfigure ( tParams,	hSource("sql_attr_timestamp"),		SPH_ATTR_TIMESTAMP,	sSourceName );
-	SqlAttrsConfigure ( tParams,	hSource("sql_attr_str2ordinal"),	SPH_ATTR_ORDINAL,	sSourceName );
 	SqlAttrsConfigure ( tParams,	hSource("sql_attr_bool"),			SPH_ATTR_BOOL,		sSourceName );
 	SqlAttrsConfigure ( tParams,	hSource("sql_attr_float"),			SPH_ATTR_FLOAT,		sSourceName );
 	SqlAttrsConfigure ( tParams,	hSource("sql_attr_bigint"),			SPH_ATTR_BIGINT,	sSourceName );
 	SqlAttrsConfigure ( tParams,	hSource("sql_attr_string"),			SPH_ATTR_STRING,	sSourceName );
 	SqlAttrsConfigure ( tParams,	hSource("sql_attr_json"),			SPH_ATTR_JSON,		sSourceName );
-	SqlAttrsConfigure ( tParams,	hSource("sql_attr_str2wordcount"),	SPH_ATTR_WORDCOUNT,	sSourceName );
 
 	SqlAttrsConfigure ( tParams,	hSource("sql_field_string"),		SPH_ATTR_STRING,	sSourceName, true );
-	SqlAttrsConfigure ( tParams,	hSource("sql_field_str2wordcount"),	SPH_ATTR_WORDCOUNT,	sSourceName, true );
 
 	LOC_GETA ( tParams.m_dFileFields,			"sql_file_field" );
 
@@ -757,7 +752,6 @@ CSphSource * SpawnSourceMSSQL ( const CSphConfigSection & hSource, const char * 
 		return NULL;
 
 	LOC_GETB ( tParams.m_bWinAuth, "mssql_winauth" );
-	LOC_GETB ( tParams.m_bUnicode, "mssql_unicode" );
 	LOC_GETS ( tParams.m_sColBuffers, "sql_column_buffers" );
 	LOC_GETS ( tParams.m_sOdbcDSN, "odbc_dsn" ); // a shortcut, may be used instead of other specific combination
 
@@ -777,7 +771,7 @@ CSphSource * SpawnSourceMSSQL ( const CSphConfigSection & hSource, const char * 
 #endif // USE_ODBC
 
 
-CSphSource * SpawnSourceXMLPipe ( const CSphConfigSection & hSource, const char * sSourceName, bool bUTF8, bool RLPARG(bProxy) )
+CSphSource * SpawnSourceXMLPipe ( const CSphConfigSection & hSource, const char * sSourceName, bool RLPARG(bProxy) )
 {
 	assert ( hSource["type"]=="xmlpipe2" );
 
@@ -788,12 +782,6 @@ CSphSource * SpawnSourceXMLPipe ( const CSphConfigSection & hSource, const char 
 		return NULL;
 	}
 
-	if ( !bUTF8 )
-	{
-		fprintf ( stdout, "ERROR: source '%s': xmlpipe2 should only be used with charset_type=utf-8\n", sSourceName );
-		return NULL;
-	}
-
 	FILE * pPipe = popen ( hSource [ "xmlpipe_command" ].cstr(), "r" );
 	if ( !pPipe )
 	{
@@ -801,12 +789,19 @@ CSphSource * SpawnSourceXMLPipe ( const CSphConfigSection & hSource, const char 
 		return NULL;
 	}
 
+	CSphSource * pResult = NULL;
+	CSphString sError;
+
 #if USE_RLP
-	return sphCreateSourceXmlpipe2 ( &hSource, pPipe, sSourceName, g_iMaxXmlpipe2Field, bProxy );
+	pResult = sphCreateSourceXmlpipe2 ( &hSource, pPipe, sSourceName, g_iMaxXmlpipe2Field, bProxy, sError );
 #else
-	return sphCreateSourceXmlpipe2 ( &hSource, pPipe, sSourceName, g_iMaxXmlpipe2Field, false );
+	pResult = sphCreateSourceXmlpipe2 ( &hSource, pPipe, sSourceName, g_iMaxXmlpipe2Field, false, sError );
 #endif // USE_RLP
 
+	if ( !pResult )
+		fprintf ( stdout, "ERROR: xmlpipe: %s", sError.cstr() );
+
+	return pResult;
 #else
 	fprintf ( stdout, "WARNING: source '%s': xmlpipe2 support NOT compiled in. To use xmlpipe2, "
 			"install missing XML libraries, reconfigure, and rebuild Sphinx\n", sSourceName );
@@ -815,7 +810,7 @@ CSphSource * SpawnSourceXMLPipe ( const CSphConfigSection & hSource, const char 
 }
 
 
-CSphSource * SpawnSourceTSVPipe ( const CSphConfigSection & hSource, const char * sSourceName, bool bUTF8, bool RLPARG(bProxy) )
+CSphSource * SpawnSourceTSVPipe ( const CSphConfigSection & hSource, const char * sSourceName, bool RLPARG(bProxy) )
 {
 	assert ( hSource["type"]=="tsvpipe" );
 
@@ -833,14 +828,14 @@ CSphSource * SpawnSourceTSVPipe ( const CSphConfigSection & hSource, const char 
 	}
 
 #if USE_RLP
-	return sphCreateSourceTSVpipe ( &hSource, pPipe, sSourceName, bUTF8, bProxy );
+	return sphCreateSourceTSVpipe ( &hSource, pPipe, sSourceName, bProxy );
 #else
-	return sphCreateSourceTSVpipe ( &hSource, pPipe, sSourceName, bUTF8, false );
+	return sphCreateSourceTSVpipe ( &hSource, pPipe, sSourceName, false );
 #endif
 }
 
 
-CSphSource * SpawnSourceCSVPipe ( const CSphConfigSection & hSource, const char * sSourceName, bool bUTF8, bool RLPARG(bProxy) )
+CSphSource * SpawnSourceCSVPipe ( const CSphConfigSection & hSource, const char * sSourceName, bool RLPARG(bProxy) )
 {
 	assert ( hSource["type"]=="csvpipe" );
 
@@ -858,14 +853,14 @@ CSphSource * SpawnSourceCSVPipe ( const CSphConfigSection & hSource, const char 
 	}
 
 #if USE_RLP
-	return sphCreateSourceCSVpipe ( &hSource, pPipe, sSourceName, bUTF8, bProxy );
+	return sphCreateSourceCSVpipe ( &hSource, pPipe, sSourceName, bProxy );
 #else
-	return sphCreateSourceCSVpipe ( &hSource, pPipe, sSourceName, bUTF8, false );
+	return sphCreateSourceCSVpipe ( &hSource, pPipe, sSourceName, false );
 #endif
 }
 
 
-CSphSource * SpawnSource ( const CSphConfigSection & hSource, const char * sSourceName, bool bUTF8, bool bBatchedRLP )
+CSphSource * SpawnSource ( const CSphConfigSection & hSource, const char * sSourceName, bool bBatchedRLP )
 {
 	if ( !hSource.Exists ( "type" ) )
 	{
@@ -892,13 +887,13 @@ CSphSource * SpawnSource ( const CSphConfigSection & hSource, const char * sSour
 	#endif
 
 	if ( hSource["type"]=="xmlpipe2" )
-		return SpawnSourceXMLPipe ( hSource, sSourceName, bUTF8, bBatchedRLP );
+		return SpawnSourceXMLPipe ( hSource, sSourceName, bBatchedRLP );
 
 	if ( hSource["type"]=="tsvpipe" )
-		return SpawnSourceTSVPipe ( hSource, sSourceName, bUTF8, bBatchedRLP );
+		return SpawnSourceTSVPipe ( hSource, sSourceName, bBatchedRLP );
 
 	if ( hSource["type"]=="csvpipe" )
-		return SpawnSourceCSVPipe ( hSource, sSourceName, bUTF8, bBatchedRLP );
+		return SpawnSourceCSVPipe ( hSource, sSourceName, bBatchedRLP );
 
 	fprintf ( stdout, "ERROR: source '%s': unknown type '%s'; skipping.\n", sSourceName,
 		hSource["type"].cstr() );
@@ -922,7 +917,7 @@ bool DoIndex ( const CSphConfigSection & hIndex, const char * sIndexName,
 	bool bPlain = true;
 	if ( hIndex("type") )
 	{
-		const CSphString & sType = hIndex["type"];
+		const CSphString & sType = hIndex["type"].strval();
 		bPlain = ( sType=="plain" );
 
 		if ( sType!="plain" && sType!="distributed" && sType!="rt" && sType!="template" )
@@ -956,18 +951,6 @@ bool DoIndex ( const CSphConfigSection & hIndex, const char * sIndexName,
 		return false;
 	}
 
-	bool bInfix = hIndex.GetInt ( "min_infix_len", 0 ) > 0;
-	if ( ( hIndex.GetInt ( "min_prefix_len", 0 ) > 0 || bInfix )
-		&& hIndex.GetInt ( "enable_star", 1 )==0 )
-	{
-		const char * szMorph = hIndex.GetStr ( "morphology", "" );
-		if ( szMorph && *szMorph && strcmp ( szMorph, "none" ) )
-		{
-			fprintf ( stdout, "ERROR: index '%s': infixes and morphology are enabled, enable_star=0\n", sIndexName );
-			return false;
-		}
-	}
-
 	// configure early
 	// (need bigram settings to spawn a proper indexing tokenizer)
 	CSphString sError;
@@ -980,8 +963,10 @@ bool DoIndex ( const CSphConfigSection & hIndex, const char * sIndexName,
 	///////////////////
 
 	CSphTokenizerSettings tTokSettings;
-	if ( !sphConfTokenizer ( hIndex, tTokSettings, sError ) )
-		sphDie ( "index '%s': %s", sIndexName, sError.cstr() );
+	sphConfTokenizer ( hIndex, tTokSettings );
+
+	CSphDictSettings tDictSettings;
+	sphConfDictionary ( hIndex, tDictSettings );
 
 	ISphTokenizer * pTokenizer = ISphTokenizer::Create ( tTokSettings, NULL, sError );
 	if ( !pTokenizer )
@@ -999,19 +984,38 @@ bool DoIndex ( const CSphConfigSection & hIndex, const char * sIndexName,
 			sphDie ( "index '%s': %s", sIndexName, sError.cstr() );
 
 	CSphDict * pDict = NULL;
-	CSphDictSettings tDictSettings;
 
-	// setup filters
+	// setup tokenization filters
 	if ( !g_sBuildStops )
 	{
-		// multiforms filter
-		sphConfDictionary ( hIndex, tDictSettings );
+		// plugin filter
+		if ( !tSettings.m_sIndexTokenFilter.IsEmpty() )
+		{
+			pTokenizer = ISphTokenizer::CreatePluginFilter ( pTokenizer, tSettings.m_sIndexTokenFilter, sError );
+			// need token_filter that just passes init phase in case stopwords or wordforms will be loaded
+			if ( !pTokenizer )
+				sphDie ( "index '%s': %s", sIndexName, sError.cstr() );
+		}
 
+		// multiforms filter
 		pDict = tDictSettings.m_bWordDict
 			? sphCreateDictionaryKeywords ( tDictSettings, NULL, pTokenizer, sIndexName, sError )
 			: sphCreateDictionaryCRC ( tDictSettings, NULL, pTokenizer, sIndexName, sError );
 		if ( !pDict )
 			sphDie ( "index '%s': %s", sIndexName, sError.cstr() );
+
+		bool bNeedExact = ( pDict->HasMorphology() || pDict->GetWordformsFileInfos().GetLength() );
+		if ( tSettings.m_bIndexExactWords && !bNeedExact )
+		{
+			tSettings.m_bIndexExactWords = false;
+			fprintf ( stdout, "WARNING: index '%s': no morphology or wordforms, index_exact_words=1 has no effect, ignoring\n", sIndexName );
+		}
+
+		if ( tDictSettings.m_bWordDict && pDict->HasMorphology() && ( tSettings.m_iMinPrefixLen || tSettings.m_iMinInfixLen ) && !tSettings.m_bIndexExactWords )
+		{
+			tSettings.m_bIndexExactWords = true;
+			fprintf ( stdout, "WARNING: index '%s': dict=keywords and prefixes and morphology enabled, forcing index_exact_words=1\n", sIndexName );
+		}
 
 		pTokenizer = ISphTokenizer::CreateMultiformFilter ( pTokenizer, pDict->GetMultiWordforms () );
 
@@ -1038,7 +1042,6 @@ bool DoIndex ( const CSphConfigSection & hIndex, const char * sIndexName,
 	CSphFieldFilterSettings tFilterSettings;
 	if ( sphConfFieldFilter ( hIndex, tFilterSettings, sError ) )
 	{
-		tFilterSettings.m_bUTF8 = tTokSettings.m_iType!=TOKENIZER_SBCS;
 		pFieldFilter = sphCreateFieldFilter ( tFilterSettings, sError );
 	}
 
@@ -1079,15 +1082,11 @@ bool DoIndex ( const CSphConfigSection & hIndex, const char * sIndexName,
 	// spawn datasources
 	/////////////////////
 
-	// check for per-index HTML stipping override
-	bool bStripOverride = false;
-
 	bool bHtmlStrip = false;
 	CSphString sHtmlIndexAttrs, sHtmlRemoveElements;
 
 	if ( hIndex("html_strip") )
 	{
-		bStripOverride = true;
 		bHtmlStrip = hIndex.GetInt ( "html_strip" )!=0;
 		sHtmlIndexAttrs = hIndex.GetStr ( "html_index_attrs" );
 		sHtmlRemoveElements = hIndex.GetStr ( "html_remove_elements" );
@@ -1114,7 +1113,7 @@ bool DoIndex ( const CSphConfigSection & hIndex, const char * sIndexName,
 		}
 		const CSphConfigSection & hSource = hSources [ pSourceName->cstr() ];
 
-		CSphSource * pSource = SpawnSource ( hSource, pSourceName->cstr(), pTokenizer->IsUtf8 (), tSettings.m_eChineseRLP==SPH_RLP_BATCHED );
+		CSphSource * pSource = SpawnSource ( hSource, pSourceName->cstr(), tSettings.m_eChineseRLP==SPH_RLP_BATCHED );
 		if ( !pSource )
 		{
 			bSpawnFailed = true;
@@ -1124,23 +1123,9 @@ bool DoIndex ( const CSphConfigSection & hIndex, const char * sIndexName,
 		if ( pSource->HasAttrsConfigured() )
 			bGotAttrs = true;
 
-		// strip_html, index_html_attrs
-		if ( bStripOverride )
+		if ( bHtmlStrip )
 		{
-			// apply per-index overrides
-			if ( bHtmlStrip )
-			{
-				if ( !pSource->SetStripHTML ( sHtmlIndexAttrs.cstr(), sHtmlRemoveElements.cstr(), bIndexSP, hIndex.GetStr("index_zones"), sError ) )
-				{
-					fprintf ( stdout, "ERROR: source '%s': %s.\n", pSourceName->cstr(), sError.cstr() );
-					return false;
-				}
-			}
-
-		} else if ( hSource.GetInt ( "strip_html" ) )
-		{
-			// apply deprecated per-source settings if there are no overrides
-			if ( !pSource->SetStripHTML ( hSource.GetStr ( "index_html_attrs" ), "", false, NULL, sError ) )
+			if ( !pSource->SetStripHTML ( sHtmlIndexAttrs.cstr(), sHtmlRemoveElements.cstr(), bIndexSP, hIndex.GetStr("index_zones"), sError ) )
 			{
 				fprintf ( stdout, "ERROR: source '%s': %s.\n", pSourceName->cstr(), sError.cstr() );
 				return false;
@@ -1194,7 +1179,7 @@ bool DoIndex ( const CSphConfigSection & hIndex, const char * sIndexName,
 					fprintf ( stdout, "ERROR: index '%s': %s\n", sIndexName, sError.cstr() );
 				continue;
 			}
-			while ( dSources[i]->IterateDocument ( sError ) && dSources[i]->m_tDocInfo.m_iDocID )
+			while ( dSources[i]->IterateDocument ( sError ) && dSources[i]->m_tDocInfo.m_uDocID )
 			{
 				while ( dSources[i]->IterateHits ( sError ) )
 				{
@@ -1238,22 +1223,15 @@ bool DoIndex ( const CSphConfigSection & hIndex, const char * sIndexName,
 
 		tSettings.m_bVerbose = bVerbose;
 
-		if ( tSettings.m_bIndexExactWords && !pDict->HasMorphology () )
-		{
-			tSettings.m_bIndexExactWords = false;
-			fprintf ( stdout, "WARNING: index '%s': no morphology, index_exact_words=1 has no effect, ignoring\n", sIndexName );
-		}
-
-		if ( tDictSettings.m_bWordDict && pDict->HasMorphology() && tSettings.m_iMinPrefixLen && !tSettings.m_bIndexExactWords )
-		{
-			tSettings.m_bIndexExactWords = true;
-			fprintf ( stdout, "WARNING: index '%s': dict=keywords and prefixes and morphology enabled, forcing index_exact_words=1\n", sIndexName );
-		}
-
 		if ( bGotAttrs && tSettings.m_eDocinfo==SPH_DOCINFO_NONE )
 		{
 			fprintf ( stdout, "FATAL: index '%s': got attributes, but docinfo is 'none' (fix your config file).\n", sIndexName );
 			exit ( 1 );
+		}
+
+		if ( pDict->GetSettings().m_bWordDict && ( tSettings.m_dPrefixFields.GetLength() || tSettings.m_dInfixFields.GetLength() ) )
+		{
+			fprintf ( stdout, "WARNING: index '%s': prefix_fields and infix_fields has no effect with dict=keywords, ignoring\n", sIndexName );
 		}
 
 		pIndex->SetProgressCallback ( ShowProgress );
@@ -1276,7 +1254,8 @@ bool DoIndex ( const CSphConfigSection & hIndex, const char * sIndexName,
 		pIndex->SetFieldFilter ( pFieldFilter );
 		pIndex->SetTokenizer ( pTokenizer );
 		pIndex->SetDictionary ( pDict );
-		pIndex->SetKeepAttrs ( g_bKeepAttrs );
+		if ( g_bKeepAttrs )
+			pIndex->SetKeepAttrs ( hIndex["path"].strval() );
 		pIndex->Setup ( tSettings );
 
 		bOK = pIndex->Build ( dSources, g_iMemLimit, g_iWriteBuffer )!=0;
@@ -1371,9 +1350,6 @@ bool DoMerge ( const CSphConfigSection & hDst, const char * sDst,
 		fprintf ( stdout, "ERROR: index '%s': %s\n", sDst, sError.cstr () );
 		return false;
 	}
-
-	pSrc->SetWordlistPreload ( hSrc.GetInt ( "ondisk_dict" )==0 );
-	pDst->SetWordlistPreload ( hDst.GetInt ( "ondisk_dict" )==0 );
 
 	if ( !pSrc->Lock() && !bRotate )
 	{
@@ -1706,7 +1682,6 @@ int main ( int argc, char ** argv )
 		} else if ( strcasecmp ( argv[i], "--quiet" )==0 )
 		{
 			g_bQuiet = true;
-			sphSetQuiet ( true );
 
 		} else if ( strcasecmp ( argv[i], "--noprogress" )==0 )
 		{
@@ -1764,6 +1739,13 @@ int main ( int argc, char ** argv )
 
 	if ( !g_bQuiet )
 		fprintf ( stdout, SPHINX_BANNER );
+
+	const char* sEndian = sphCheckEndian();
+	if ( sEndian )
+	{
+		fprintf ( stdout, "%s", sEndian );
+		return 1;
+	}
 
 	if ( !g_bQuiet && sizeof(SphDocID_t)==4 )
 		fprintf ( stdout, "32-bit IDs are deprecated, rebuild your binaries with --enable-id64" );
@@ -1833,6 +1815,10 @@ int main ( int argc, char ** argv )
 	// load config
 	///////////////
 
+	CSphString sError;
+	if ( !sphInitCharsetAliasTable ( sError ) )
+		sphDie ( "failed to init charset alias table: %s", sError.cstr() );
+
 	CSphConfigParser cp;
 	CSphConfig & hConf = cp.m_tConf;
 	sOptConfig = sphLoadConfig ( sOptConfig, g_bQuiet, cp );
@@ -1853,7 +1839,7 @@ int main ( int argc, char ** argv )
 
 		if ( hIndexer("on_file_field_error") )
 		{
-			const CSphString & sVal = hIndexer["on_file_field_error"];
+			const CSphString & sVal = hIndexer["on_file_field_error"].strval();
 			if ( sVal=="ignore_field" )
 				g_eOnFileFieldError = FFE_IGNORE_FIELD;
 			else if ( sVal=="skip_document" )
@@ -1869,7 +1855,7 @@ int main ( int argc, char ** argv )
 		bool bJsonKeynamesToLowercase = false;
 		if ( hIndexer("on_json_attr_error") )
 		{
-			const CSphString & sVal = hIndexer["on_json_attr_error"];
+			const CSphString & sVal = hIndexer["on_json_attr_error"].strval();
 			if ( sVal=="ignore_attr" )
 				bJsonStrict = false;
 			else if ( sVal=="fail_index" )
@@ -1880,7 +1866,7 @@ int main ( int argc, char ** argv )
 
 		if ( hIndexer("json_autoconv_keynames") )
 		{
-			const CSphString & sVal = hIndexer["json_autoconv_keynames"];
+			const CSphString & sVal = hIndexer["json_autoconv_keynames"].strval();
 			if ( sVal=="lowercase" )
 				bJsonKeynamesToLowercase = true;
 			else
@@ -1999,5 +1985,5 @@ int main ( int argc, char ** argv )
 }
 
 //
-// $Id: indexer.cpp 4301 2013-11-06 07:41:00Z tomat $
+// $Id: indexer.cpp 4889 2015-01-29 10:51:25Z tomat $
 //

@@ -3,8 +3,8 @@
 //
 
 //
-// Copyright (c) 2001-2013, Andrew Aksyonoff
-// Copyright (c) 2008-2013, Sphinx Technologies Inc
+// Copyright (c) 2001-2015, Andrew Aksyonoff
+// Copyright (c) 2008-2015, Sphinx Technologies Inc
 // All rights reserved
 //
 // This program is free software; you can redistribute it and/or modify
@@ -351,14 +351,12 @@ void UrlBreak ( Split_t & tBest, const char * sWord )
 				tFull.AddSplitPos ( tTail, iLen );
 
 				// check if the full one is our new best full one
-				bool bNewBest = false;
 				if ( tBest < tFull )
 				{
 					// FIXME? we do this even when the new split is *not* all-keywords,
 					// but the old best split was; is this ever a problem?
 					tBest = tFull;
 //					tBest.Dump ( sWord, "new-best" );
-					bNewBest = true;
 				}
 
 				// check if the resulting partial split is worth scanning further

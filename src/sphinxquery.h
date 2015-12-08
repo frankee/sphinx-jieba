@@ -1,10 +1,10 @@
 //
-// $Id: sphinxquery.h 4111 2013-08-24 08:44:44Z kevg $
+// $Id: sphinxquery.h 4885 2015-01-20 07:02:07Z deogar $
 //
 
 //
-// Copyright (c) 2001-2013, Andrew Aksyonoff
-// Copyright (c) 2008-2013, Sphinx Technologies Inc
+// Copyright (c) 2001-2015, Andrew Aksyonoff
+// Copyright (c) 2008-2015, Sphinx Technologies Inc
 // All rights reserved
 //
 // This program is free software; you can redistribute it and/or modify
@@ -27,17 +27,21 @@ struct XQKeyword_t
 	int					m_iAtomPos;
 	bool				m_bFieldStart;	///< must occur at very start
 	bool				m_bFieldEnd;	///< must occur at very end
+	float				m_fBoost;		///< keyword IDF will be multiplied by this
 	bool				m_bExpanded;	///< added by prefix expansion
 	bool				m_bExcluded;	///< excluded by query (rval to operator NOT)
 	bool				m_bMorphed;		///< morphology processing (wordforms, stemming etc) already done
+	void *				m_pPayload;
 
 	XQKeyword_t ()
 		: m_iAtomPos ( -1 )
 		, m_bFieldStart ( false )
 		, m_bFieldEnd ( false )
+		, m_fBoost ( 1.0f )
 		, m_bExpanded ( false )
 		, m_bExcluded ( false )
 		, m_bMorphed ( false )
+		, m_pPayload ( NULL )
 	{}
 
 	XQKeyword_t ( const char * sWord, int iPos )
@@ -45,9 +49,11 @@ struct XQKeyword_t
 		, m_iAtomPos ( iPos )
 		, m_bFieldStart ( false )
 		, m_bFieldEnd ( false )
+		, m_fBoost ( 1.0f )
 		, m_bExpanded ( false )
 		, m_bExcluded ( false )
 		, m_bMorphed ( false )
+		, m_pPayload ( NULL )
 	{}
 };
 
@@ -57,6 +63,7 @@ enum XQOperator_e
 {
 	SPH_QUERY_AND,
 	SPH_QUERY_OR,
+	SPH_QUERY_MAYBE,
 	SPH_QUERY_NOT,
 	SPH_QUERY_ANDNOT,
 	SPH_QUERY_BEFORE,
@@ -297,7 +304,8 @@ void	sphSetupQueryTokenizer ( ISphTokenizer * pTokenizer );
 /// lots of arguments here instead of simply the index pointer, because
 /// a) we do not always have an actual real index class, and
 /// b) might need to tweak stuff even we do
-bool	sphParseExtendedQuery ( XQQuery_t & tQuery, const char * sQuery, const ISphTokenizer * pTokenizer, const CSphSchema * pSchema, CSphDict * pDict, const CSphIndexSettings & tSettings );
+/// FIXME! remove either pQuery or sQuery
+bool	sphParseExtendedQuery ( XQQuery_t & tQuery, const char * sQuery, const CSphQuery * pQuery, const ISphTokenizer * pTokenizer, const CSphSchema * pSchema, CSphDict * pDict, const CSphIndexSettings & tSettings );
 
 // perform boolean optimization on tree
 void	sphOptimizeBoolean ( XQNode_t ** pXQ, const ISphKeywordsStat * pKeywords );
@@ -308,5 +316,5 @@ int		sphMarkCommonSubtrees ( int iXQ, const XQQuery_t * pXQ );
 #endif // _sphinxquery_
 
 //
-// $Id: sphinxquery.h 4111 2013-08-24 08:44:44Z kevg $
+// $Id: sphinxquery.h 4885 2015-01-20 07:02:07Z deogar $
 //

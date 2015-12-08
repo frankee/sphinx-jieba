@@ -6,6 +6,18 @@
 /* Flags used to configure me */
 #undef CONFIGURE_FLAGS
 
+/* Define to 1 if you want runtime load libexpat using dlopen */
+#undef DL_EXPAT
+
+/* Define to 1 if you want runtime load mysql using dlopen */
+#undef DL_MYSQL
+
+/* Define to 1 if runtime load PosgreSQL using dlopen */
+#undef DL_PGSQL
+
+/* Define to 1 if you want runtime load odbc/iodbc using dlopen */
+#undef DL_UNIXODBC
+
 /* Define to 1 if you have the `backtrace' function. */
 #undef HAVE_BACKTRACE
 
@@ -54,9 +66,6 @@
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
-/* Define to 1 if you have the `dl' library (-ldl). */
-#undef HAVE_LIBDL
-
 /* Define to 1 if you have the `rt' library (-lrt). */
 #undef HAVE_LIBRT
 
@@ -99,10 +108,6 @@
 
 /* Define to 1 if you have the `pthread_mutex_timedlock' function. */
 #undef HAVE_PTHREAD_MUTEX_TIMEDLOCK
-
-/* Define to 1 if your system has a GNU libc compatible `realloc' function,
-   and to 0 otherwise. */
-#undef HAVE_REALLOC
 
 /* Define to 1 if you have the `select' function. */
 #undef HAVE_SELECT
@@ -149,6 +154,9 @@
 
 /* Define to 1 if you have the `strtol' function. */
 #undef HAVE_STRTOL
+
+/* Whether we have internal atomic functions */
+#undef HAVE_SYNC_FETCH
 
 /* Define to 1 if you have the <sys/epoll.h> header file. */
 #undef HAVE_SYS_EPOLL_H
@@ -318,9 +326,6 @@
 
 /* Define to `int' if <sys/types.h> does not define. */
 #undef pid_t
-
-/* Define to rpl_realloc if the replacement function should be used. */
-#undef realloc
 
 /* Define to `unsigned int' if <sys/types.h> does not define. */
 #undef size_t

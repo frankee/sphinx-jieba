@@ -28,7 +28,6 @@ index plain
 {
 	source			= src
     docinfo			= extern
-    charset_type	= utf-8
 	path			= <data_path/>/plain
 	stopwords		= <this_test/>/stopwords.txt
 	blend_chars = .
@@ -39,7 +38,6 @@ index rt
 {
 	type			= rt
     docinfo			= extern
-    charset_type	= utf-8
 	path			= <data_path/>/rt
 	stopwords		= <this_test/>/stopwords.txt
 
@@ -98,6 +96,10 @@ INSERT INTO `test_table` VALUES
 <sphinxql>select * from both where idd1!=11</sphinxql>
 <sphinxql>select * from both where match ('bird') and idd1!=11</sphinxql>
 <sphinxql>select * from both where idd1!=10</sphinxql>
+
+<!-- regression stopwords missed on disk chunk save (either regular or forced) -->
+<sphinxql>flush ramchunk rt</sphinxql>
+<sphinxql>select * from rt where match ('a bird')</sphinxql>
 </sphqueries>
 
 </test>

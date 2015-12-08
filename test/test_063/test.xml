@@ -3,11 +3,6 @@
 
 <name>blend characters</name>
 
-<requires>
-	<variant_match />
-</requires>
-
-
 <config>
 indexer
 {
@@ -33,11 +28,6 @@ index test
 	path	= <data_path/>/test
 
 	blend_chars = @, |, +, ., *, !, (, ), [, ], {, }
-
-	<dynamic>
-		<variant>charset_type = utf-8</variant>
-		<variant>charset_type = sbcs</variant>
-	</dynamic>
 }
 
 source test1
@@ -53,7 +43,6 @@ index test1
 	path	= <data_path/>/test1
 
 	blend_chars = ., @,
-	charset_type = utf-8
 	min_word_len = 2
 }
 
@@ -70,7 +59,6 @@ index test2
 	path	= <data_path/>/test2
 
 	blend_chars = -, @,
-	charset_type = utf-8
 }
 
 index star
@@ -79,9 +67,18 @@ index star
 	path	= <data_path/>/star
 
 	blend_chars = @, ., !, (, ), [, ], {, }
-	charset_type = utf-8
 	min_infix_len = 1
-	enable_star = 1
+	dict = crc
+}
+
+index star_kw
+{
+	source	= test
+	path	= <data_path/>/star_kw
+
+	blend_chars = @, ., !, (, ), [, ], {, }
+	min_infix_len = 2
+	dict = keywords
 }
 
 source test3
@@ -97,10 +94,6 @@ index test3
 	path	= <data_path/>/test3
 
 	blend_chars = -, @, "
-	<dynamic>
-		<variant>charset_type = utf-8</variant>
-		<variant>charset_type = sbcs</variant>
-	</dynamic>
 }
 
 index rt
@@ -109,12 +102,24 @@ index rt
 	path	= <data_path/>/rt
 
 	blend_chars = @
-	charset_type = utf-8
 
 	rt_field	 = text
 	rt_attr_uint	 = idd
 }
 
+source test4
+{
+	type			= mysql
+	<sql_settings/>
+	sql_query		= SELECT 1 as document_id, ' the dog of my friend ' as text UNION SELECT 2 as document_id, ' dog is my friend ' as text
+}
+
+index test4
+{
+	source	= test4
+	path	= <data_path/>/test4
+	blend_chars = U+2E
+}
 
 </config>
 
@@ -228,6 +233,9 @@ INSERT INTO test_table VALUES
 	<query mode="extended2" index="star">^*g*</query>
 	<query mode="extended2" index="star">^*h*</query>
 	<query mode="extended2" index="star">*c*$</query>
+	<!--regression for missed field modifier vs tiny expanded -->
+	<query mode="extended2" index="star_kw">*hh*</query>
+	<query mode="extended2" index="star_kw">*hh*$</query>
 </queries>
 
 <sphqueries>
@@ -246,6 +254,8 @@ INSERT INTO test_table VALUES
 	<sphinxql>CALL KEYWORDS ( 'thatsgoingverylongwordthathasblendedpartattheand', 'rt', 1 )</sphinxql>
 	<sphinxql>INSERT INTO rt VALUES ( 2, 'thatsgoingverylongwordthathasblendedpartattheand@blendedpart', 11 )</sphinxql>
 	<sphinxql>CALL KEYWORDS ( 'thatsgoingverylongwordthathasblendedpartattheand', 'rt', 1 )</sphinxql>
+	<!-- regression blended vs quorum argument -->
+	<sphinxql>select * from test4 where match ( ' "dog of friend"/0.5 ' )</sphinxql>
 </sphqueries>
 
 </test>

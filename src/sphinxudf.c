@@ -3,8 +3,8 @@
 //
 
 //
-// Copyright (c) 2011-2013, Andrew Aksyonoff
-// Copyright (c) 2011-2013, Sphinx Technologies Inc
+// Copyright (c) 2011-2015, Andrew Aksyonoff
+// Copyright (c) 2011-2015, Sphinx Technologies Inc
 // All rights reserved
 //
 // This program is free software; you can redistribute it and/or modify
@@ -86,7 +86,7 @@ int sphinx_factors_unpack ( const unsigned int * in, SPH_UDF_FACTORS * out )
 	if ( out->num_fields > 0 )
 	{
 		i = out->num_fields*sizeof(SPH_UDF_FIELD_FACTORS);
-		out->field = malloc ( i );
+		out->field = (SPH_UDF_FIELD_FACTORS*) malloc ( i );
 		memset ( out->field, 0, i );
 	}
 
@@ -126,7 +126,7 @@ int sphinx_factors_unpack ( const unsigned int * in, SPH_UDF_FACTORS * out )
 		return 1;
 
 	if ( out->max_uniq_qpos > 0 )
-		out->term = malloc ( out->max_uniq_qpos*sizeof(SPH_UDF_TERM_FACTORS) );
+		out->term = (SPH_UDF_TERM_FACTORS*) malloc ( out->max_uniq_qpos*sizeof(SPH_UDF_TERM_FACTORS) );
 
 	for ( i=0; i<out->max_uniq_qpos; i++ )
 	{
@@ -142,7 +142,7 @@ int sphinx_factors_unpack ( const unsigned int * in, SPH_UDF_FACTORS * out )
 
 	// extract field_tf factors
 	fields = *in++;
-	out->field_tf = malloc ( fields*sizeof(int) );
+	out->field_tf = (int*) malloc ( fields*sizeof(int) );
 	memcpy ( out->field_tf, in, fields*sizeof(int) );
 	in += fields;
 
@@ -171,7 +171,7 @@ int sphinx_factors_deinit ( SPH_UDF_FACTORS * out )
 
 static const unsigned int * skip_fields ( const unsigned int * in, int n )
 {
-	in += 8; // skip heading document factors
+	in += 6 + ( ( in[5] + 31 ) / 32 ) * 2; // skip heading document factors and 2 exact masks
 	while ( n-->0 )
 		in += ( in[0]>0 ) ? 15 : 1; // skip 15 ints per matched field, or 1 per unmatched
 	return in;
@@ -205,8 +205,8 @@ const unsigned int * sphinx_get_term_factors ( const unsigned int * in, int term
 	if ( !in || term<0 )
 		return NULL;
 	in = skip_fields ( in, in[5] ); // skip all fields
-	if ( term>=(int)in[0] )
-		return NULL; // sanity check vs max_uniq_qpos
+	if ( term>(int)in[0] )
+		return NULL; // sanity check vs max_uniq_qpos ( qpos and terms range - [1, max_uniq_qpos]
 	in = skip_terms ( in, term-1);
 	if ( !in[0] )
 		return NULL; // unmatched term
@@ -218,6 +218,7 @@ const unsigned int * sphinx_get_term_factors ( const unsigned int * in, int term
 
 int sphinx_get_doc_factor_int ( const unsigned int * in, enum sphinx_doc_factor f )
 {
+	int fields_size;
 	switch ( f )
 	{
 		case SPH_DOCF_BM25:				return (int)in[1];
@@ -229,9 +230,32 @@ int sphinx_get_doc_factor_int ( const unsigned int * in, enum sphinx_doc_factor 
 			in = skip_fields ( in, in[5] );
 			return (int)in[0];
 		case SPH_DOCF_EXACT_HIT_MASK:	return (int)in[6];
-		case SPH_DOCF_EXACT_ORDER_MASK:	return (int)in[7];
+		case SPH_DOCF_EXACT_ORDER_MASK:	fields_size = ( (int)in[5] + 31 ) / 32; return (int)in[6+fields_size];
 	}
 	return 0;
+}
+
+const unsigned int * sphinx_get_doc_factor_ptr ( const unsigned int * in, enum sphinx_doc_factor f )
+{
+	int fields_size;
+
+	if ( f==SPH_DOCF_EXACT_HIT_MASK )
+		return in + 6;
+
+	fields_size = ( (int)in[5] + 31 ) / 32;
+	if ( f==SPH_DOCF_EXACT_ORDER_MASK )
+		return in + 6 + fields_size;
+
+	return 0;
+};
+
+
+float sphinx_get_doc_factor_float ( const unsigned int * in, enum sphinx_doc_factor f )
+{
+	if ( f==SPH_DOCF_BM25A )
+		return *(float*)&in[2];
+	else
+		return 0.0f;
 }
 
 

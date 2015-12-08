@@ -37,21 +37,18 @@ index idx1
 {
 	source = src1
 	path = <data_path/>/idx1
-	charset_type = utf-8
 }
 
 index idx2
 {
 	source = src2
 	path = <data_path/>/idx2
-	charset_type = utf-8
 }
 
 index idx3
 {
 	source = src3
 	path = <data_path/>/idx3
-	charset_type = utf-8
 }
 
 source src_embedded
@@ -67,7 +64,6 @@ index embedded
 {
 	source = src_embedded
 	path = <data_path/>/embedded
-	charset_type = utf-8
 }
 
 source src_tsv1
@@ -77,14 +73,13 @@ source src_tsv1
 	tsvpipe_field = title
 	tsvpipe_field = content
 	tsvpipe_attr_multi = tags
-	tsvpipe_attr_uint = gid
+	tsvpipe_attr_uint = gid:3
 }
 
 index tsv1
 {
 	source = src_tsv1
 	path = <data_path/>/tsv1
-	charset_type = utf-8
 }
 
 source src_csv1
@@ -92,16 +87,15 @@ source src_csv1
 	type = csvpipe
 	csvpipe_command = cat <this_test/>/data1.csv
 	csvpipe_field = title
-	csvpipe_field = content
-	csvpipe_attr_multi = tags
-	csvpipe_attr_uint = gid
+	csvpipe_field = Content
+	csvpipe_attr_multi = Tags
+	csvpipe_attr_uint = Gid
 }
 
 index csv1
 {
 	source = src_csv1
 	path = <data_path/>/csv1
-	charset_type = utf-8
 }
 
 source src_csv2
@@ -110,8 +104,8 @@ source src_csv2
 	csvpipe_command = cat <this_test/>/data2.csv
 	csvpipe_delimiter =  +  
 	csvpipe_field = title
-	csvpipe_field = content
-	csvpipe_attr_multi = tags
+	csvpipe_field = Content
+	csvpipe_attr_multi = Tags
 	csvpipe_attr_uint = gid
 }
 
@@ -119,7 +113,6 @@ index csv2
 {
 	source = src_csv2
 	path = <data_path/>/csv2
-	charset_type = utf-8
 }
 
 </config>

@@ -1,10 +1,10 @@
 //
-// $Id: sphinxclient.h 3883 2013-05-24 07:15:19Z tomat $
+// $Id: sphinxclient.h 4885 2015-01-20 07:02:07Z deogar $
 //
 
 //
-// Copyright (c) 2001-2013, Andrew Aksyonoff
-// Copyright (c) 2008-2013, Sphinx Technologies Inc
+// Copyright (c) 2001-2015, Andrew Aksyonoff
+// Copyright (c) 2008-2015, Sphinx Technologies Inc
 // All rights reserved
 //
 // This program is free software; you can redistribute it and/or modify
@@ -12,6 +12,11 @@
 // have received a copy of the LGPL license along with this program; if you
 // did not, you can find it at http://www.gnu.org/
 //
+
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//							WARNING
+// We strongly recommend you to use SphinxQL instead of the API
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 #ifndef _sphinxclient_
 #define _sphinxclient_
@@ -261,5 +266,5 @@ void						sphinx_status_destroy			( char ** status, int num_rows, int num_cols )
 #endif // _sphinxclient_
 
 //
-// $Id: sphinxclient.h 3883 2013-05-24 07:15:19Z tomat $
+// $Id: sphinxclient.h 4885 2015-01-20 07:02:07Z deogar $
 //

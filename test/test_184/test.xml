@@ -61,7 +61,6 @@ index xml_ext
 {
 	source				= src_ext
 	path				= <data_path/>/xml_ext
-	charset_type		= utf-8
 	docinfo				= extern
 	index_field_lengths = 1
 }
@@ -70,7 +69,6 @@ index xml_int
 {
 	source				= src_int
 	path				= <data_path/>/xml_int
-	charset_type		= utf-8
 	docinfo				= extern
 	index_field_lengths = 1
 }
@@ -102,9 +100,25 @@ index fields
 {
 	source				= src_fields
 	path				= <data_path/>/fields
-	charset_type		= utf-8
 	docinfo				= extern
 }
+
+source src_str2
+{
+	type				= mysql
+	<sql_settings/>
+	sql_query			= SELECT 1 id, 11 gid, 'who' title, 'Well who is that shouting?' content UNION SELECT 2 id, 12 gid, 'is' title, 'All he ever gives us is pain' content UNION SELECT 3 id, 13 gid, 'who' title, 'Well who is shoping there?' content 
+	sql_field_string 	= title
+	sql_attr_uint 		= gid
+}
+
+index str2
+{
+	source				= src_str2
+	path				= <data_path/>/str2
+	docinfo				= extern
+}
+
 </config>
 
 <db_create>
@@ -205,6 +219,28 @@ INSERT INTO test_table VALUES
 
 <!-- hits from over 32 field  -->
 <sphinxql>select *, weight() as w, packedfactors() from fields where match(' test ') option ranker=expr('sum(lcs)')</sphinxql>
+
+<sphinxql>update test set nonexistent=1.1, gid=1 where id=100 option ignore_nonexistent_columns=1</sphinxql>
+
+<!-- regression term related factors vs packedfactors flag -->
+<sphinxql>select id, weight() as w, packedfactors() from test where match(' "by seven" ') ORDER by id ASC option ranker=expr('sum(min_idf)*1000'), idf='plain,tfidf_unnormalized'</sphinxql>
+<sphinxql>select id, weight() as w, rankfactors() from test where match(' "by seven" ') ORDER by id ASC option ranker=export('sum(min_idf)*1000'), idf='plain,tfidf_unnormalized'</sphinxql>
+<sphinxql>select id, weight() as w from test where match(' "by seven" ') ORDER by id ASC option ranker=expr('sum(min_idf)*1000'), idf='plain,tfidf_unnormalized'</sphinxql>
+
+<!-- both ranker shoud return the same weights -->
+<sphinxql>select id, weight() from dup where match('the the') option ranker=proximity_bm25</sphinxql>
+<sphinxql>select id, weight() from dup where match('the the') option ranker=expr('sum(lcs*user_weight)*1000+bm25')</sphinxql>
+
+<!-- regression wlccs did not get reset between documents -->
+<sphinxql>select id, weight() from test where match('seven|lies') option ranker=expr('sum(1000*wlccs)')</sphinxql>
+
+<!-- regression string condition at expression and expression ranker -->
+<sphinxql>select id, weight() w, title=1 as c, title from str2 where match('who | is') option ranker=expr('sum(1000)')</sphinxql>
+<sphinxql>select id, weight() w, title='who' as c, title from str2 where match('who | is') option ranker=expr('sum(1000)')</sphinxql>
+<sphinxql>select id, weight() w, title from str2 where match('who | is') option ranker=expr('sum(1000) * (gid*10+(title=1))')</sphinxql>
+<sphinxql>select id, weight() w, title from str2 where match('who | is') option ranker=expr('sum(1000) * (gid*10+(title="who"))')</sphinxql>
+<sphinxql>select id, weight() w, title from str2 where match('who | is') option ranker=expr('sum(gid*10+(title="who"))')</sphinxql>
+<sphinxql>select id, weight() w, title from str2 where match('who | is') option ranker=expr('top(gid*10+(title="who"))')</sphinxql>
 
 </sphqueries>
 

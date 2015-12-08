@@ -21,7 +21,13 @@ index test
 	source			= test
 	path			= <data_path/>/test
 
-	charset_type	= utf-8
+}
+
+index test_stops
+{
+	source			= test
+	path			= <data_path/>/test_stops
+	stopwords		= stopwords.txt
 }
 </config>
 
@@ -39,6 +45,11 @@ $results[] = $client->BuildExcerpts($docs, 'test', '(one) NEAR/35 ("five")', $op
 // regression crash on 0 docs snippet
 $results[] = $client->BuildExcerpts(array(), 'test', '(one) NEAR/35 ("five")', $opts );
 $results[] = $client->GetLastError();
+
+// regression for snippets vs stopwords vs proximity
+$docs = array( 'A section of dome lifted up' );
+$results[] = $client->BuildExcerpts($docs, 'test_stops', '"section of dome"~5', $opts );
+$results[] = $client->BuildExcerpts($docs, 'test_stops', '"section of dome"~5', array( 'query_mode'=>true, 'exact_phrase'=>true ) );
 
 ]]></custom_test>
 
