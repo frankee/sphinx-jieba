@@ -10,6 +10,8 @@
 /*.ncb
 /*.sdf
 /.hg
+/.idea
+/build
 
 # /api/libsphinxclient/
 /api/libsphinxclient/*.ncb
@@ -63,3 +65,9 @@
 /test/ql/data/*.lock
 /test/ql/*.class
 /test/ql/*.exe
+
+.cproject
+.project
+.settings/language.settings.xml
+*.sublime-project
+*.sublime-workspace

@@ -13,6 +13,7 @@
 // did not, you can find it at http://www.gnu.org/
 //
 
+#include "cppjieba/jieba.hpp"
 #include "sphinx.h"
 #include "sphinxstem.h"
 #include "sphinxquery.h"
@@ -248,6 +249,40 @@ protected:
 /// global idf definitions hash
 static SmallStringHash_T <CSphGlobalIDF * >	g_hGlobalIDFs;
 static CSphStaticMutex						g_tGlobalIDFLock;
+
+const unsigned char UTF8CharLenTable[256] =
+{
+        /*
+        1-4:    a leading byte of UTF-8 sequence, and the value is the sequence's length
+        8:      a content byte(Not a leading byte)
+        16:     illegal byte, it never apperas in a UTF-8 sequence
+        */
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, //0-15
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, //16-31
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, //32-47
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, //48-63
+
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, //64-79
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, //80-95
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, //96-111
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, //112-127
+
+        8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+        8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+        8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+        8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+
+        16, 16, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, //192-207
+        2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, //208-223
+
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, //224-239
+
+        4, 4, 4, 4, 4, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16  //240-255
+};
+//const char * UTF8_CHAR_LEN_TABLE="\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x1\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x8\x10\x10\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x2\x3\x3\x3\x3\x3\x3\x3\x3\x3\x3\x3\x3\x3\x3\x3\x3\x4\x4\x4\x4\x4\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10";
+const unsigned char * UTF8_CHAR_LEN_TABLE = UTF8CharLenTable;
+void* g_pChineseDictionary = NULL;
+
 
 /////////////////////////////////////////////////////////////////////////////
 // COMPILE-TIME CHECKS
@@ -2563,6 +2598,29 @@ public:
 };
 
 
+/// UTF-8 Chinese tokenizer
+template < bool IS_QUERY >
+class CSphTokenizer_UTF8Chinese : public CSphTokenizerBase2
+{
+public:
+												CSphTokenizer_UTF8Chinese ();
+		virtual ~                               CSphTokenizer_UTF8Chinese ();
+        virtual bool                            SetChineseDictionary ( const char * sConfig, CSphString & sError );
+        virtual void                            SetBuffer ( const BYTE * sBuffer, int iLength );
+        virtual BYTE *                          GetToken ();
+		virtual void                            FlushAccum ();
+        virtual ISphTokenizer *         		Clone ( ESphTokenizerClone eMode ) const;
+        virtual bool                            IsUtf8 () const { return true; }
+        virtual int                             GetCodepointLength ( int iCode ) const;
+        virtual int                             GetMaxCodepointLength () const { return m_tLC.GetMaxCodepointLength(); }
+
+private:
+	std::vector<std::string> m_words;
+	const char* m_pText;
+	cppjieba::Jieba* m_pJieba;
+};
+
+
 /// UTF-8 tokenizer with n-grams
 template < bool IS_QUERY >
 class CSphTokenizer_UTF8Ngram : public CSphTokenizer_UTF8<IS_QUERY>
@@ -3794,6 +3852,12 @@ ISphTokenizer * sphCreateUTF8Tokenizer ()
 	return new CSphTokenizer_UTF8<false> ();
 }
 
+ISphTokenizer * sphCreateUTF8ChineseTokenizer ()
+{
+        return new CSphTokenizer_UTF8Chinese<false> ();
+}
+
+
 ISphTokenizer * sphCreateUTF8NgramTokenizer ()
 {
 	return new CSphTokenizer_UTF8Ngram<false> ();
@@ -4395,11 +4459,13 @@ bool LoadTokenizerSettings ( CSphReader & tReader, CSphTokenizerSettings & tSett
 		return true;
 
 	tSettings.m_iType = tReader.GetByte ();
+	/*
 	if ( tSettings.m_iType!=TOKENIZER_UTF8 && tSettings.m_iType!=TOKENIZER_NGRAM )
 	{
 		sWarning = "can't load an old index with SBCS tokenizer";
 		return false;
 	}
+	*/
 
 	tSettings.m_sCaseFolding = tReader.GetString ();
 	tSettings.m_iMinWordLen = tReader.GetDword ();
@@ -4427,6 +4493,7 @@ bool LoadTokenizerSettings ( CSphReader & tReader, CSphTokenizerSettings & tSett
 		tSettings.m_sBlendChars = tReader.GetString ();
 	if ( uVersion>=24 )
 		tSettings.m_sBlendMode = tReader.GetString();
+	tSettings.m_sChineseDictionary = tReader.GetString();
 
 	return true;
 }
@@ -4456,6 +4523,7 @@ void SaveTokenizerSettings ( CSphWriter & tWriter, ISphTokenizer * pTokenizer, i
 	tWriter.PutString ( tSettings.m_sNgramChars.cstr () );
 	tWriter.PutString ( tSettings.m_sBlendChars.cstr () );
 	tWriter.PutString ( tSettings.m_sBlendMode.cstr () );
+	tWriter.PutString ( tSettings.m_sChineseDictionary.cstr () );
 }
 
 
@@ -4727,6 +4795,7 @@ ISphTokenizer * ISphTokenizer::Create ( const CSphTokenizerSettings & tSettings,
 	switch ( tSettings.m_iType )
 	{
 		case TOKENIZER_UTF8:	pTokenizer = sphCreateUTF8Tokenizer (); break;
+		case TOKENIZER_CHINESE: pTokenizer = sphCreateUTF8ChineseTokenizer (); break;
 		case TOKENIZER_NGRAM:	pTokenizer = sphCreateUTF8NgramTokenizer (); break;
 		default:
 			sError.SetSprintf ( "failed to create tokenizer (unknown charset type '%d')", tSettings.m_iType );
@@ -4766,11 +4835,19 @@ ISphTokenizer * ISphTokenizer::Create ( const CSphTokenizerSettings & tSettings,
 		return NULL;
 	}
 
+	if ( !tSettings.m_sChineseDictionary.IsEmpty () && !pTokenizer->SetChineseDictionary ( tSettings.m_sChineseDictionary.cstr (), sError ) )
+	{
+			sError.SetSprintf ( "'chinese_dictionary': %s", sError.cstr() );
+			return NULL;
+	}
+
+
 	if ( !pTokenizer->SetBlendMode ( tSettings.m_sBlendMode.cstr (), sError ) )
 	{
 		sError.SetSprintf ( "'blend_mode': %s", sError.cstr() );
 		return NULL;
 	}
+
 
 	pTokenizer->SetNgramLen ( tSettings.m_iNgramLen );
 
@@ -6002,6 +6079,409 @@ BYTE * CSphTokenizer_UTF8<IS_QUERY>::GetToken ()
 		? DoGetToken<IS_QUERY,true>()
 		: DoGetToken<IS_QUERY,false>();
 }
+
+//===========================================================================================
+/////////////////////////////////////////////////////////////////////////////
+
+template < bool IS_QUERY >
+CSphTokenizer_UTF8Chinese<IS_QUERY>::CSphTokenizer_UTF8Chinese ()
+{
+    CSphString sTmp;
+    SetCaseFolding ( SPHINX_DEFAULT_UTF8_TABLE, sTmp );
+    m_bHasBlend = false;
+    m_pJieba = NULL;
+}
+
+template < bool IS_QUERY >
+CSphTokenizer_UTF8Chinese<IS_QUERY>::~CSphTokenizer_UTF8Chinese ()
+{
+	if (m_pJieba) {
+		delete m_pJieba;
+	}
+}
+
+template < bool IS_QUERY >
+void CSphTokenizer_UTF8Chinese<IS_QUERY>::SetBuffer ( const BYTE * sBuffer, int iLength )
+{
+    // check that old one is over and that new length is sane
+    assert ( iLength>=0 );
+
+    // set buffer
+    m_pBuffer = sBuffer;
+    m_pBufferMax = sBuffer + iLength;
+    m_pCur = sBuffer;
+    m_pTokenStart = m_pTokenEnd = NULL;
+    m_pBlendStart = m_pBlendEnd = NULL;
+
+    m_iOvershortCount = 0;
+    m_bBoundary = m_bTokenBoundary = false;
+}
+
+template < bool IS_QUERY >
+bool CSphTokenizer_UTF8Chinese<IS_QUERY>::SetChineseDictionary ( const char * sConfig, CSphString & sError )
+{
+    if (m_pJieba == NULL) {
+        std::string path = sConfig;
+        std::string dict = path + "jieba.dict.utf8";
+        std::string model = path + "hmm_model.utf8";
+        std::string userDict = path + "user.dict.utf8";
+        std::string idf = path + "idf.utf8";
+        std::string stopWords = path + "stop_words.utf8";
+
+        m_pJieba = new cppjieba::Jieba(dict,model,userDict, idf, stopWords);
+    }
+    else {
+        printf("already create the jieba instance");
+    }
+
+    return true;
+}
+
+inline bool IsSpace(const std::string& str) {
+    for (std::size_t i = 0; i < str.size(); ++i) {
+        if (str[i] == ' ' || str[i] == '\t' || str[i] == '\r' || str[i] == '\n') {
+            continue;
+        }
+        else {
+            return false;
+        }
+    }
+    return true;
+}
+
+template < bool IS_QUERY >
+BYTE * CSphTokenizer_UTF8Chinese<IS_QUERY>::GetToken ()
+{
+	m_bWasSpecial = false;
+	m_bBlended = false;
+	m_iOvershortCount = 0;
+	m_bTokenBoundary = false;
+	m_bWasSynonym = false;
+
+    bool IS_BLEND = m_bHasBlend;
+    // return pending blending variants
+    if_const ( IS_BLEND )
+    {
+        BYTE * pVar = GetBlendedVariant ();
+        if ( pVar )
+            return pVar;
+        m_bBlendedPart = ( m_pBlendEnd!=NULL );
+    }
+
+    // in query mode, lets capture (soft-whitespace hard-whitespace) sequences and adjust overshort counter
+    // sample queries would be (one NEAR $$$) or (one | $$$ two) where $ is not a valid character
+    bool bGotNonToken = ( !IS_QUERY || m_bPhrase ); // only do this in query mode, never in indexing mode, never within phrases
+    bool bGotSoft = false; // hey Beavis he said soft huh huhhuh
+
+    size_t iWordLength=0;
+    bool bFoundDict;
+    const int iMaxWordLength = 128;
+
+    while(iWordLength==0){
+        m_pText = (const char*)m_pCur;
+        std::size_t iLeft = m_pBufferMax-m_pCur;
+        int iStrSize = iLeft < iMaxWordLength ? iLeft : iMaxWordLength;
+        if (iStrSize == 0) {
+            return NULL;
+        }
+
+        bFoundDict = false;
+        if (IS_QUERY) {
+            m_pJieba->Cut(std::string(m_pText, iStrSize), m_words);
+        }
+        else {
+            m_pJieba->CutForSearch(std::string(m_pText, iStrSize), m_words);
+        }
+
+        if (!m_words.empty()) {
+            for (std::size_t i = 0; i < m_words.size(); ++i) {
+                if (IsSpace(m_words[i])) {
+                    continue;
+                }
+                else {
+                    iWordLength = m_words[0].size();
+                    bFoundDict = true;
+                    break;
+                }
+            }
+        }
+        else {
+            bFoundDict = false;
+        }
+
+        if(!bFoundDict) {
+
+//original utf8 handler, it is borrowed here to process unmatched characters
+//mostly for the latin characters I guess
+//start=====================================================================
+
+            for ( ;; )
+            {
+                // get next codepoint
+                const BYTE * pCur = m_pCur; // to redo special char, if there's a token already
+
+                int iCodePoint;
+                int iCode;
+                if ( pCur<m_pBufferMax && *pCur<128 )
+                {
+                    iCodePoint = *m_pCur++;
+                    iCode = m_tLC.m_pChunk[0][iCodePoint];
+                } else
+                {
+                    iCodePoint = GetCodepoint(); // advances m_pCur
+                    iCode = m_tLC.ToLower ( iCodePoint );
+                }
+
+                // handle escaping
+                bool bWasEscaped = ( IS_QUERY && iCodePoint=='\\' ); // whether current codepoint was escaped
+                if ( bWasEscaped )
+                {
+                    iCodePoint = GetCodepoint();
+                    iCode = m_tLC.ToLower ( iCodePoint );
+                    if ( !Special2Simple ( iCode ) )
+                        iCode = 0;
+                }
+
+                // handle eof
+                if ( iCode<0 )
+                {
+                    // skip trailing short word
+                    FlushAccum ();
+                    if ( m_iLastTokenLen<m_tSettings.m_iMinWordLen )
+                    {
+                        if ( !m_bShortTokenFilter || !ShortTokenFilter ( m_sAccum, m_iLastTokenLen ) )
+                        {
+                            if ( m_iLastTokenLen )
+                                m_iOvershortCount++;
+                            m_iLastTokenLen = 0;
+                            if_const ( IS_BLEND )
+                                BlendAdjust ( pCur );
+                            return NULL;
+                        }
+                    }
+
+                    // keep token end here as BlendAdjust might change m_pCur
+                    m_pTokenEnd = m_pCur;
+
+                    // return trailing word
+                    if_const ( IS_BLEND && !BlendAdjust ( pCur ) )
+                        return NULL;
+                    if_const ( IS_BLEND && m_bBlended )
+                        return GetBlendedVariant();
+                    return m_sAccum;
+                }
+
+                // handle all the flags..
+                if_const ( IS_QUERY )
+                    iCode = CodepointArbitrationQ ( iCode, bWasEscaped, *m_pCur );
+                else if ( m_bDetectSentences )
+                    iCode = CodepointArbitrationI ( iCode );
+
+                // handle ignored chars
+                if ( iCode & FLAG_CODEPOINT_IGNORE )
+                    continue;
+
+                // handle blended characters
+                if_const ( IS_BLEND && ( iCode & FLAG_CODEPOINT_BLEND ) )
+                {
+                    if ( m_pBlendEnd )
+                        iCode = 0;
+                    else
+                    {
+                        m_bBlended = true;
+                        m_pBlendStart = m_iAccum ? m_pTokenStart : pCur;
+                    }
+                }
+
+                // handle soft-whitespace-only tokens
+                if ( !bGotNonToken && !m_iAccum )
+                {
+                    if ( !bGotSoft )
+                    {
+                        // detect opening soft whitespace
+                        if ( ( iCode==0 && !( iCode & MASK_FLAGS ) && !IsWhitespace ( iCodePoint ) )
+                                || ( ( iCode & FLAG_CODEPOINT_BLEND ) && !m_iAccum ) )
+                        {
+                            bGotSoft = true;
+                        }
+                    } else
+                    {
+                        // detect closing hard whitespace or special
+                        // (if there was anything meaningful in the meantime, we must never get past the outer if!)
+                        if ( IsWhitespace ( iCodePoint ) || ( iCode & FLAG_CODEPOINT_SPECIAL ) )
+                        {
+                            m_iOvershortCount++;
+                            bGotNonToken = true;
+                        }
+                    }
+                }
+
+                // handle whitespace and boundary
+                if ( m_bBoundary && ( iCode==0 ) )
+                {
+                    m_bTokenBoundary = true;
+                    m_iBoundaryOffset = pCur - m_pBuffer - 1;
+                }
+                m_bBoundary = ( iCode & FLAG_CODEPOINT_BOUNDARY )!=0;
+
+                if ( iCode==0 || m_bBoundary )
+                {
+                    FlushAccum ();
+                    if_const ( IS_BLEND && !BlendAdjust ( pCur ) )
+                        continue;
+
+                    if ( m_iLastTokenLen<m_tSettings.m_iMinWordLen
+                            && !( m_bShortTokenFilter && ShortTokenFilter ( m_sAccum, m_iLastTokenLen ) ) )
+                    {
+                        if ( m_iLastTokenLen )
+                            m_iOvershortCount++;
+                        //continue;
+                        break;
+                    } else
+                    {
+                        m_pTokenEnd = pCur;
+                        //if(m_tDa.commonPrefixSearch((Darts::DoubleArray::key_type *)(pCur), m_pResultPair, 256, m_pBufferMax-m_pCur)>0) {
+                        //        m_pCur=pCur;
+                        //}
+
+                        if_const ( IS_BLEND && m_bBlended )
+                            return GetBlendedVariant();
+                        return m_sAccum;
+                    }
+                }
+
+                // handle specials
+                if ( iCode & FLAG_CODEPOINT_SPECIAL )
+                {
+                    // skip short words preceding specials
+                    if ( m_iAccum<m_tSettings.m_iMinWordLen )
+                    {
+                        m_sAccum[m_iAccum] = '\0';
+
+                        if ( !m_bShortTokenFilter || !ShortTokenFilter ( m_sAccum, m_iAccum ) )
+                        {
+                            if ( m_iAccum )
+                                m_iOvershortCount++;
+
+                            FlushAccum ();
+                        }
+                    }
+
+                    if ( m_iAccum==0 )
+                    {
+                        m_bNonBlended = m_bNonBlended || ( !( iCode & FLAG_CODEPOINT_BLEND ) && !( iCode & FLAG_CODEPOINT_SPECIAL ) );
+                        m_bWasSpecial = !( iCode & FLAG_CODEPOINT_NGRAM );
+                        m_pTokenStart = pCur;
+                        m_pTokenEnd = m_pCur;
+                        AccumCodepoint ( iCode & MASK_CODEPOINT ); // handle special as a standalone token
+                    } else
+                    {
+                        m_pCur = pCur; // we need to flush current accum and then redo special char again
+                        m_pTokenEnd = pCur;
+                    }
+
+                    FlushAccum ();
+                    if_const ( IS_BLEND )
+                    {
+                        if ( !BlendAdjust ( pCur ) )
+                            continue;
+                        if ( m_bBlended )
+                            return GetBlendedVariant();
+                    }
+                    return m_sAccum;
+                }
+
+                if ( m_iAccum==0 )
+                    m_pTokenStart = pCur;
+
+                // tricky bit
+                // heading modifiers must not (!) affected blended status
+                // eg. we want stuff like '=-' (w/o apostrophes) thrown away when pure_blend is on
+                if_const ( IS_BLEND )
+                    if_const (!( IS_QUERY && !m_iAccum && sphIsModifier ( iCode & MASK_CODEPOINT ) ) )
+                            m_bNonBlended = m_bNonBlended || !( iCode & FLAG_CODEPOINT_BLEND );
+
+                // just accumulate
+                // manual inlining of utf8 encoder gives us a few extra percent
+                // which is important here, this is a hotspot
+                if ( m_iAccum<SPH_MAX_WORD_LEN && ( m_pAccum-m_sAccum+SPH_MAX_UTF8_BYTES<=(int)sizeof(m_sAccum) ) )
+                {
+                    iCode &= MASK_CODEPOINT;
+                    m_iAccum++;
+                    SPH_UTF8_ENCODE ( m_pAccum, iCode );
+                }
+            }
+
+//end=====================================================================
+        }
+    }//end of while
+
+    if(iWordLength==0)
+        return NULL;
+
+    assert ( iWordLength < (int)sizeof(m_sAccum) );
+    memcpy(m_sAccum, m_pText, iWordLength);
+    m_sAccum[iWordLength]='\0';
+
+    m_pTokenStart = m_pCur;
+    m_pCur += iWordLength;
+    m_pTokenEnd = m_pCur;
+
+    return m_sAccum;
+}
+
+
+template < bool IS_QUERY >
+void CSphTokenizer_UTF8Chinese<IS_QUERY>::FlushAccum ()
+{
+        assert ( m_pAccum-m_sAccum < (int)sizeof(m_sAccum) );
+        m_iLastTokenLen = m_iAccum;
+        *m_pAccum = 0;
+        m_iAccum = 0;
+        m_pAccum = m_sAccum;
+}
+
+
+template < bool IS_QUERY >
+ISphTokenizer * CSphTokenizer_UTF8Chinese<IS_QUERY>::Clone ( ESphTokenizerClone eMode ) const
+{
+    //CSphTokenizer_UTF8Chinese * pClone;
+    if ( eMode!=SPH_CLONE_INDEX ) {
+        CSphTokenizer_UTF8Chinese<true> *pClone = new CSphTokenizer_UTF8Chinese<true>();
+        pClone->CloneBase ( this, eMode );
+
+        CSphString error;
+        pClone->SetChineseDictionary(m_tSettings.m_sChineseDictionary.cstr(), error);
+        return pClone;
+
+    } else {
+        CSphTokenizer_UTF8Chinese<false> *pClone = new CSphTokenizer_UTF8Chinese<false>();
+        pClone->CloneBase ( this, eMode );
+
+        CSphString error;
+        pClone->SetChineseDictionary(m_tSettings.m_sChineseDictionary.cstr(), error);
+        return pClone;
+    }
+}
+
+
+template < bool IS_QUERY >
+int CSphTokenizer_UTF8Chinese<IS_QUERY>::GetCodepointLength ( int iCode ) const
+{
+    if ( iCode<128 )
+        return 1;
+
+    int iBytes = 0;
+    while ( iCode & 0x80 )
+    {
+        iBytes++;
+        iCode <<= 1;
+    }
+
+    assert ( iBytes>=2 && iBytes<=4 );
+    return iBytes;
+}
+//===========================================================================================
 
 
 bool CSphTokenizerBase2::CheckException ( const BYTE * pStart, const BYTE * pCur, bool bQueryMode )
@@ -11268,13 +11748,13 @@ void CSphHitBuilder::cidxHit ( CSphAggregateHit * pHit, const CSphRowitem * pAtt
 		}
 
 		/* duplicate hits from duplicated documents
-		... 0x03, 0x03 ... 
-		... 0x8003, 0x8003 ... 
-		... 1, 0x8003, 0x03 ... 
-		... 1, 0x03, 0x8003 ... 
-		... 1, 0x8003, 0x04 ... 
-		... 1, 0x03, 0x8003, 0x8003 ... 
-		... 1, 0x03, 0x8003, 0x03 ... 
+		... 0x03, 0x03 ...
+		... 0x8003, 0x8003 ...
+		... 1, 0x8003, 0x03 ...
+		... 1, 0x03, 0x8003 ...
+		... 1, 0x8003, 0x04 ...
+		... 1, 0x03, 0x8003, 0x8003 ...
+		... 1, 0x03, 0x8003, 0x03 ...
 		*/
 
 		assert ( m_tLastHit.m_iWordPos < pHit->m_iWordPos );

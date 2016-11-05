@@ -364,6 +364,9 @@ inline int sphIsAttr ( int c )
 	return ( c>='0' && c<='9' ) || ( c>='a' && c<='z' ) || ( c>='A' && c<='Z' ) || c=='_';
 }
 
+/// Chinese dictionary for segmentation
+extern void * g_pChineseDictionary;
+
 /////////////////////////////////////////////////////////////////////////////
 // TOKENIZERS
 /////////////////////////////////////////////////////////////////////////////
@@ -405,6 +408,7 @@ class CSphLowercaser
 	friend class ISphTokenizer;
 	friend class CSphTokenizerBase;
 	friend class CSphTokenizer_UTF8_Base;
+	template<bool> friend class CSphTokenizer_UTF8Chinese;
 	friend class CSphTokenizerBase2;
 
 public:
@@ -491,7 +495,7 @@ struct CSphTokenizerSettings
 	CSphString			m_sBlendChars;
 	CSphString			m_sBlendMode;
 	CSphString			m_sIndexingPlugin;	///< this tokenizer wants an external plugin to process its raw output
-
+	CSphString          m_sChineseDictionary;
 						CSphTokenizerSettings ();
 };
 
@@ -554,6 +558,9 @@ public:
 
 	/// set n-gram length (for CJK n-gram indexing)
 	virtual void					SetNgramLen ( int ) {}
+
+	/// set Chinese dictionary (for Chinese segmentation and indexing) by SZG 20090408
+	virtual bool            SetChineseDictionary ( const char *, CSphString & ) { return true; }
 
 	/// load synonyms list
 	virtual bool					LoadSynonyms ( const char * sFilename, const CSphEmbeddedFiles * pFiles, CSphString & sError ) = 0;

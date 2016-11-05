@@ -406,6 +406,7 @@ static KeyDesc_t g_dKeysIndex[] =
 	{ "embedded_limit",			0, NULL },
 	{ "min_word_len",			0, NULL },
 	{ "charset_type",			KEY_REMOVED, NULL },
+	{ "chinese_dictionary",     0, NULL },
 	{ "charset_table",			0, NULL },
 	{ "ignore_chars",			0, NULL },
 	{ "min_prefix_len",			0, NULL },
@@ -1133,6 +1134,8 @@ void sphConfTokenizer ( const CSphConfigSection & hIndex, CSphTokenizerSettings 
 {
 	tSettings.m_iNgramLen = Max ( hIndex.GetInt ( "ngram_len" ), 0 );
 
+	tSettings.m_iType = hIndex("chinese_dictionary") ? TOKENIZER_CHINESE:( hIndex("ngram_chars") ? TOKENIZER_NGRAM : TOKENIZER_UTF8 );
+
 	if ( hIndex ( "ngram_chars" ) )
 	{
 		if ( tSettings.m_iNgramLen )
@@ -1144,6 +1147,7 @@ void sphConfTokenizer ( const CSphConfigSection & hIndex, CSphTokenizerSettings 
 	tSettings.m_sCaseFolding = hIndex.GetStr ( "charset_table" );
 	tSettings.m_iMinWordLen = Max ( hIndex.GetInt ( "min_word_len", 1 ), 1 );
 	tSettings.m_sNgramChars = hIndex.GetStr ( "ngram_chars" );
+	tSettings.m_sChineseDictionary  = hIndex.GetStr( "chinese_dictionary" );
 	tSettings.m_sSynonymsFile = hIndex.GetStr ( "exceptions" ); // new option name
 	tSettings.m_sIgnoreChars = hIndex.GetStr ( "ignore_chars" );
 	tSettings.m_sBlendChars = hIndex.GetStr ( "blend_chars" );

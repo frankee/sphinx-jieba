@@ -39,6 +39,8 @@ ac_search_libs("socket" "setsockopt" _DUMMY EXTRA_LIBRARIES)
 ac_search_libs("nsl;socket;resolv" "gethostbyname" _DUMMY EXTRA_LIBRARIES)
 ac_search_libs("m" "logf" HAVE_LOGF EXTRA_LIBRARIES)
 ac_search_libs("z" "inflate" _DUMMY EXTRA_LIBRARIES)
+ac_search_libs("iconv" "iconv_open" _DUMMY EXTRA_LIBRARIES)
+ac_search_libs("expat" "XML_SetXmlDeclHandler" _DUMMY EXTRA_LIBRARIES)
 #check_function_exists(
 
 
@@ -77,7 +79,7 @@ source_group ("Generated Header Files" FILES ${GHEADERS})
 if (WIN32)
 	add_custom_command(OUTPUT "sphinxversion.h" COMMAND ${SPHINXSEARCH_SOURCE_DIR}/src/svnxrev.cmd ${SPHINXSEARCH_SOURCE_DIR})
 else (WIN32)
-	add_custom_command(OUTPUT "sphinxversion.h" COMMAND /bin/sh ${SPHINXSEARCH_SOURCE_DIR}/src/svnxrev.sh ${SPHINXSEARCH_SOURCE_DIR})
+	#add_custom_command(OUTPUT "sphinxversion.h" COMMAND /bin/sh ${SPHINXSEARCH_SOURCE_DIR}/src/svnxrev.sh ${SPHINXSEARCH_SOURCE_DIR})
 endif(WIN32)
 
 set (HEADERS ${HEADERS} sphinxversion.h)
