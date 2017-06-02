@@ -35,8 +35,8 @@ else(WIN32)
 	ENDIF (WITH_STEMMER)
 endif (WIN32)
 
-include_directories("${SPHINXSEARCH_SOURCE_DIR}/cppjieba/include")
-include_directories("${SPHINXSEARCH_SOURCE_DIR}/cppjieba/deps")
+target_include_directories("${SPHINXSEARCH_SOURCE_DIR}/cppjieba/include")
+target_include_directories("${SPHINXSEARCH_SOURCE_DIR}/cppjieba/deps")
 
 #if(CMAKE_CONFIGURATION_TYPES)
 if (NOT WIN32)
